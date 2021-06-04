@@ -23,6 +23,7 @@ class DynamicSeparableConv2d(nn.Module):
 		self.kernel_size_list = kernel_size_list
 		self.stride = stride
 		self.dilation = dilation
+		self.padding = get_same_padding(self.kernel_size)
 
 		self.conv = nn.Conv2d(
 			self.max_in_channels, self.max_in_channels, max(self.kernel_size_list), self.stride,
@@ -98,6 +99,7 @@ class DynamicConv2d(nn.Module):
 		self.kernel_size = kernel_size
 		self.stride = stride
 		self.dilation = dilation
+		self.padding = get_same_padding(self.kernel_size)
 
 		self.conv = nn.Conv2d(
 			self.max_in_channels, self.max_out_channels, self.kernel_size, stride=self.stride, bias=False,
@@ -131,6 +133,7 @@ class DynamicGroupConv2d(nn.Module):
 		self.groups_list = groups_list
 		self.stride = stride
 		self.dilation = dilation
+		self.padding = get_same_padding(self.kernel_size)
 
 		self.conv = nn.Conv2d(
 			self.in_channels, self.out_channels, max(self.kernel_size_list), self.stride,

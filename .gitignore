@@ -113,3 +113,6 @@ venv.bak/
 *.xml
 *.iml
 /bash/distributed_imagenet.sh
+
+dev_env/
+tutorial/.torch/

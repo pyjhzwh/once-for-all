@@ -337,6 +337,7 @@ class DynamicConvLayer(MyModule):
             max_in_channels=max(self.in_channel_list), max_out_channels=max(self.out_channel_list),
             kernel_size=self.kernel_size, stride=self.stride, dilation=self.dilation,
         )
+        self.padding = self.conv.padding
         if self.use_bn:
             self.bn = DynamicBatchNorm2d(max(self.out_channel_list))
         self.act = build_activation(self.act_func)
@@ -406,6 +407,7 @@ class DynamicConvLayer(MyModule):
             'kernel_size': self.kernel_size,
             'stride': self.stride,
             'dilation': self.dilation,
+            'padding': self.padding,
             'use_bn': self.use_bn,
             'act_func': self.act_func,
         }

@@ -3,6 +3,7 @@
 # International Conference on Learning Representations (ICLR), 2020.
 
 import copy
+from ofa.nas import memory_predictor
 import random
 import numpy as np
 from tqdm import tqdm
@@ -12,9 +13,10 @@ __all__ = ['EvolutionFinder']
 
 class EvolutionFinder:
 
-	def __init__(self, efficiency_predictor, accuracy_predictor, **kwargs):
+	def __init__(self, efficiency_predictor, accuracy_predictor, memory_predictor, **kwargs):
 		self.efficiency_predictor = efficiency_predictor
 		self.accuracy_predictor = accuracy_predictor
+		self.memory_predictor = memory_predictor
 
 		# evolution hyper-parameters
 		self.arch_mutate_prob = kwargs.get('arch_mutate_prob', 0.1)
@@ -31,14 +33,15 @@ class EvolutionFinder:
 	def update_hyper_params(self, new_param_dict):
 		self.__dict__.update(new_param_dict)
 
-	def random_valid_sample(self, constraint):
+	def random_valid_sample(self, latency_constraint, workingmem_constraint=float('inf')):
 		while True:
 			sample = self.arch_manager.random_sample_arch()
 			efficiency = self.efficiency_predictor.get_efficiency(sample)
-			if efficiency <= constraint:
-				return sample, efficiency
+			workingmem = self.memory_predictor.get_workingmem(sample)
+			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
+				return sample, efficiency, workingmem
 
-	def mutate_sample(self, sample, constraint):
+	def mutate_sample(self, sample, latency_constraint, workingmem_constraint=float('inf')):
 		while True:
 			new_sample = copy.deepcopy(sample)
 
@@ -46,10 +49,11 @@ class EvolutionFinder:
 			self.arch_manager.mutate_arch(new_sample, self.arch_mutate_prob)
 
 			efficiency = self.efficiency_predictor.get_efficiency(new_sample)
-			if efficiency <= constraint:
-				return new_sample, efficiency
+			workingmem = self.memory_predictor.get_workingmem(new_sample)
+			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
+				return new_sample, efficiency, workingmem
 
-	def crossover_sample(self, sample1, sample2, constraint):
+	def crossover_sample(self, sample1, sample2, latency_constraint, workingmem_constraint=float('inf')):
 		while True:
 			new_sample = copy.deepcopy(sample1)
 			for key in new_sample.keys():
@@ -60,10 +64,12 @@ class EvolutionFinder:
 						new_sample[key][i] = random.choice([sample1[key][i], sample2[key][i]])
 
 			efficiency = self.efficiency_predictor.get_efficiency(new_sample)
-			if efficiency <= constraint:
-				return new_sample, efficiency
+			workingmem = self.memory_predictor.get_workingmem(new_sample)
+			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
+				return new_sample, efficiency, workingmem
 
-	def run_evolution_search(self, constraint, verbose=False, **kwargs):
+	def run_evolution_search(self, latency_constraint, workingmem_constraint=float('inf'), 
+				verbose=False, **kwargs):
 		"""Run a single roll-out of regularized evolution to a fixed time budget."""
 		self.update_hyper_params(kwargs)
 
@@ -71,25 +77,28 @@ class EvolutionFinder:
 		parents_size = int(round(self.parent_ratio * self.population_size))
 
 		best_valids = [-100]
-		population = []  # (validation, sample, latency) tuples
+		population = []  # (validation, sample, latency, workingmem) tuples
 		child_pool = []
 		efficiency_pool = []
+		workingmem_pool = []
 		best_info = None
 		if verbose:
 			print('Generate random population...')
 		for _ in range(self.population_size):
-			sample, efficiency = self.random_valid_sample(constraint)
+			sample, efficiency, workingmem = self.random_valid_sample(latency_constraint, workingmem_constraint)
 			child_pool.append(sample)
 			efficiency_pool.append(efficiency)
+			workingmem_pool.append(workingmem)
 
 		accs = self.accuracy_predictor.predict_acc(child_pool)
 		for i in range(self.population_size):
-			population.append((accs[i].item(), child_pool[i], efficiency_pool[i]))
+			population.append((accs[i].item(), child_pool[i], efficiency_pool[i], workingmem_pool[i]))
 
 		if verbose:
 			print('Start Evolution...')
 		# After the population is seeded, proceed with evolving the population.
-		with tqdm(total=self.max_time_budget, desc='Searching with constraint (%s)' % constraint,
+		with tqdm(total=self.max_time_budget, desc='Searching with constraint (%s,%s)' % 
+					(latency_constraint, workingmem_constraint),
 		          disable=(not verbose)) as t:
 			for i in range(self.max_time_budget):
 				parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
@@ -109,25 +118,30 @@ class EvolutionFinder:
 				population = parents
 				child_pool = []
 				efficiency_pool = []
+				workingmem_pool = []
 
 				for j in range(mutation_numbers):
 					par_sample = population[np.random.randint(parents_size)][1]
 					# Mutate
-					new_sample, efficiency = self.mutate_sample(par_sample, constraint)
+					new_sample, efficiency, workingmem = self.mutate_sample(par_sample, 
+						latency_constraint, workingmem_constraint)
 					child_pool.append(new_sample)
 					efficiency_pool.append(efficiency)
+					workingmem_pool.append(workingmem)
 
 				for j in range(self.population_size - mutation_numbers):
 					par_sample1 = population[np.random.randint(parents_size)][1]
 					par_sample2 = population[np.random.randint(parents_size)][1]
 					# Crossover
-					new_sample, efficiency = self.crossover_sample(par_sample1, par_sample2, constraint)
+					new_sample, efficiency, workingmem = self.crossover_sample(par_sample1, par_sample2, 
+						latency_constraint, workingmem_constraint)
 					child_pool.append(new_sample)
 					efficiency_pool.append(efficiency)
+					workingmem_pool.append(workingmem)
 
 				accs = self.accuracy_predictor.predict_acc(child_pool)
 				for j in range(self.population_size):
-					population.append((accs[j].item(), child_pool[j], efficiency_pool[j]))
+					population.append((accs[j].item(), child_pool[j], efficiency_pool[j], workingmem_pool[j]))
 
 				t.update(1)
 
