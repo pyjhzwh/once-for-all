@@ -10,12 +10,12 @@ import torchvision.transforms as transforms
 __all__ = ['MyRandomResizedCrop', 'MyResizeRandomCrop', 'MyResize']
 
 _pil_interpolation_to_str = {
-    Image.NEAREST: 'PIL.Image.NEAREST',
-    Image.BILINEAR: 'PIL.Image.BILINEAR',
-    Image.BICUBIC: 'PIL.Image.BICUBIC',
-    Image.LANCZOS: 'PIL.Image.LANCZOS',
-    Image.HAMMING: 'PIL.Image.HAMMING',
-    Image.BOX: 'PIL.Image.BOX',
+    F.InterpolationMode.NEAREST: 'PIL.Image.NEAREST',
+    F.InterpolationMode.BILINEAR: 'PIL.Image.BILINEAR',
+    F.InterpolationMode.BICUBIC: 'PIL.Image.BICUBIC',
+    F.InterpolationMode.BOX: 'PIL.Image.LANCZOS',
+    F.InterpolationMode.HAMMING: 'PIL.Image.HAMMING',
+    F.InterpolationMode.LANCZOS: 'PIL.Image.BOX',
 }
 
 
