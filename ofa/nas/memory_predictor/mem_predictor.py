@@ -18,7 +18,6 @@ def count_baseline_conv_mem(in_size, out_size, in_channels, out_channels):
 
 def count_selfloop_conv_mem(conv_layer_param):
 	mem_planner = MemoryAllocation(conv_layer_param)
-	mem_planner.place_inFM()
 	return mem_planner.actual_mem_size()
 
 
@@ -346,6 +345,7 @@ class ResNet50WorkingMemTable(WorkingMemTable):
 	def count_workingmem_given_config(net_config, image_size=224, type=0):
 		# 0 baseline mem count; 1: self-loop mem count
 		workingmem = 0
+		#tmp_workingmem = 0
 		# input stem
 		for layer_config in net_config['input_stem']:
 			if layer_config['name'] != 'ConvLayer':
@@ -359,10 +359,11 @@ class ResNet50WorkingMemTable(WorkingMemTable):
 				workingmem = max(workingmem, count_baseline_conv_mem(image_size, out_image_size, in_channel, out_channel))
 			elif type == 1:
 				workingmem = max(workingmem, count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
-			#elif type == 2:
-			#	layer = Conv_layer_param('input_stem', image_size, image_size, in_channel, layer_config['kernel_size'],
-			#		layer_config['padding'], layer_config['stride'], out_image_size, out_image_size, out_channel)
-			#	workingmem = max(workingmem, count_selfloop_conv_mem(layer))
+			elif type == 2:
+				layer = Conv_layer_param('input_stem', image_size, image_size, in_channel, layer_config['kernel_size'],
+					layer_config['padding'], layer_config['stride'], out_image_size, out_image_size, out_channel)
+				workingmem = max(workingmem, count_selfloop_conv_mem(layer))
+				#tmp_workingmem = max(tmp_workingmem, count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
 				#print(count_selfloop_conv_mem(layer), count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
 			image_size = out_image_size
 		# max pooling
@@ -393,20 +394,36 @@ class ResNet50WorkingMemTable(WorkingMemTable):
 			elif type == 1:
 				workingmem = max(workingmem, residual_size + 
 					count_ideal_conv_mem(image_size, out_image_size, mid_channel, mid_channel))
+			elif type == 2:
+				layer = Conv_layer_param('conv2', image_size, image_size, mid_channel, block_config['kernel_size'],
+					block_config['padding'], block_config['stride'], out_image_size, out_image_size, mid_channel)
+				workingmem = max(workingmem, residual_size + 
+					count_selfloop_conv_mem(layer))
+				#tmp_workingmem = max(tmp_workingmem, residual_size + 
+				#	count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
+
 			# conv3
 			if type == 0:
 				workingmem = max(workingmem, residual_size +
 					count_baseline_conv_mem(out_image_size, out_image_size, mid_channel, out_channel))
 			elif type == 1:
 				workingmem = max(workingmem, residual_size + 
-					count_ideal_conv_mem(image_size, out_image_size, mid_channel, mid_channel))
+					count_ideal_conv_mem(out_image_size, out_image_size, mid_channel, out_channel))
+			elif type == 2:
+				layer = Conv_layer_param('conv3', out_image_size, out_image_size, mid_channel, 1,
+					0, 1, out_image_size, out_image_size, out_channel)
+				workingmem = max(workingmem, residual_size + 
+					count_selfloop_conv_mem(layer))
+				#tmp_workingmem = max(tmp_workingmem, residual_size +
+				#	count_ideal_conv_mem(out_image_size, out_image_size, mid_channel, out_channel))
 			
 			image_size = out_image_size
 		# final classifier
 		if type == 0 :
 			workingmem = max(workingmem, count_baseline_conv_mem(1, 1, net_config['classifier']['in_features'],
 								 net_config['classifier']['out_features']))
-		elif type == 1:
+		elif type == 1 or type == 2:
 			workingmem = max(workingmem, count_ideal_conv_mem(1, 1, net_config['classifier']['in_features'],
 								 net_config['classifier']['out_features']))
+		#print(workingmem / 1024, tmp_workingmem/1024)
 		return workingmem / 1024  # KB
