@@ -469,6 +469,8 @@ class DynamicResNetBottleneckBlock(MyModule):
 
         self.active_expand_ratio = max(self.expand_ratio_list)
         self.active_out_channel = max(self.out_channel_list)
+        
+        self.padding = self.conv2[0].padding
 
     def forward(self, x):
         feature_dim = self.active_middle_channels
@@ -507,6 +509,7 @@ class DynamicResNetBottleneckBlock(MyModule):
             'expand_ratio_list': self.expand_ratio_list,
             'kernel_size': self.kernel_size,
             'stride': self.stride,
+            'padding': self.padding,
             'act_func': self.act_func,
             'downsample_mode': self.downsample_mode,
         }
@@ -567,6 +570,7 @@ class DynamicResNetBottleneckBlock(MyModule):
             'out_channels': self.active_out_channel,
             'kernel_size': self.kernel_size,
             'stride': self.stride,
+            'padding': self.padding,
             'expand_ratio': self.active_expand_ratio,
             'mid_channels': self.active_middle_channels,
             'act_func': self.act_func,
