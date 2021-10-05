@@ -53,6 +53,11 @@ def ofa_net(net_id, pretrained=True):
 			dropout_rate=0, depth_list=[0, 1, 2], expand_ratio_list=[0.2, 0.25, 0.35], width_mult_list=[0.65, 0.8, 1.0]
 		)
 		net_id = 'ofa_resnet50_d=0+1+2_e=0.2+0.25+0.35_w=0.65+0.8+1.0'
+	elif net_id == 'ofa_resnet50_expand':
+		net = OFAResNets(
+			dropout_rate=0, depth_list=[0, 1, 2], expand_ratio_list=[0.1, 0.15, 0.2, 0.25, 0.35], width_mult_list=[0.65, 0.8, 1.0]
+		)
+		net_id = 'ofa_resnet50_d=0+1+2_e=0.2+0.25+0.35_w=0.65+0.8+1.0'
 	else:
 		raise ValueError('Not supported: %s' % net_id)
 

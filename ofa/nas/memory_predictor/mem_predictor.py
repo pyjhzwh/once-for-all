@@ -20,6 +20,21 @@ def count_selfloop_conv_mem(conv_layer_param):
 	mem_planner = MemoryAllocation(conv_layer_param)
 	return mem_planner.actual_mem_size()
 
+def count_conv_mem(workingmem, in_size, layer_config, type=0):
+	#layer_config = net_config['first_conv']['first_conv']
+	in_channel = layer_config['in_channels']
+	out_channel = layer_config['out_channels']
+	out_size = int((in_size - 1) / layer_config['stride'] + 1)
+		
+	if type == 0:
+		workingmem = max(workingmem, count_baseline_conv_mem(in_size, out_size,in_channel,out_channel))
+	elif type == 1:
+		workingmem = max(workingmem, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
+	elif type == 2:
+		layer = Conv_layer_param('input_stem', in_size, in_size, in_channel, layer_config['kernel_size'],
+				layer_config['padding'], layer_config['stride'], out_size, out_size, out_channel)
+		workingmem = max(workingmem, count_selfloop_conv_mem(layer))
+	return workingmem
 
 class WorkingMemTable(object):
 
@@ -291,10 +306,11 @@ class MBv3WorkingMemTable(WorkingMemTable):
 		return predicted_latency
 
 	@staticmethod
-	def count_workingmem_given_config(net_config, image_size=224):
+	def count_workingmem_given_config(net_config, image_size=224, type=0):
 		workingmem = 0
 		# first conv
-		workingmem += count_conv_mem((image_size + 1) // 2, 3, net_config['first_conv']['out_channels'], 3, 1)
+		layer_config = net_config['first_conv']
+		workingmem = count_conv_mem(workingmem, image_size, layer_config, type)	
 		# blocks
 		fsize = (image_size + 1) // 2
 		for block in net_config['blocks']:
@@ -306,7 +322,7 @@ class MBv3WorkingMemTable(WorkingMemTable):
 				mb_conv['mid_channels'] = round(mb_conv['in_channels'] * mb_conv['expand_ratio'])
 			if mb_conv['expand_ratio'] != 1:
 				# inverted bottleneck
-				workingmem += count_conv_mem(fsize, mb_conv['in_channels'], mb_conv['mid_channels'], 1, 1)
+				workingmem = count_conv_mem(workingmem,fsize, mb_conv['in_channels'], mb_conv['mid_channels'], 1, 1)
 			# depth conv
 			workingmem += count_conv_mem(out_fz, mb_conv['mid_channels'], mb_conv['mid_channels'],
 									 mb_conv['kernel_size'], mb_conv['mid_channels'])
@@ -319,10 +335,9 @@ class MBv3WorkingMemTable(WorkingMemTable):
 			workingmem += count_conv_mem(out_fz, mb_conv['mid_channels'], mb_conv['out_channels'], 1, 1)
 			fsize = out_fz
 		# final expand layer
-		workingmem += count_conv_mem(fsize, net_config['final_expand_layer']['in_channels'],
-								 net_config['final_expand_layer']['out_channels'], 1, 1)
+		workingmem = count_conv_mem(workingmem, fsize, net_config['final_expand_layer'], type)
 		# feature mix layer
-		workingmem += count_conv_mem(1, net_config['feature_mix_layer']['in_channels'],
+		workingmem = count_conv_mem(1, net_config['feature_mix_layer']['in_channels'],
 								 net_config['feature_mix_layer']['out_channels'], 1, 1)
 		# classifier
 		workingmem += count_conv_mem(1, net_config['classifier']['in_features'],
@@ -343,7 +358,7 @@ class ResNet50WorkingMemTable(WorkingMemTable):
 
 	@staticmethod
 	def count_workingmem_given_config(net_config, image_size=224, type=0):
-		# 0 baseline mem count; 1: self-loop mem count
+		# 0 baseline mem count; 1: ideal mem count; 2: self-loop mem count
 		workingmem = 0
 		#tmp_workingmem = 0
 		# input stem

@@ -6,6 +6,7 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.nn.modules import module
 
 __all__ = ['AccuracyPredictor']
 
@@ -27,15 +28,27 @@ class AccuracyPredictor(nn.Module):
 				nn.Linear(self.arch_encoder.n_dim if i == 0 else self.hidden_size, self.hidden_size),
 				nn.ReLU(inplace=True),
 			))
-		layers.append(nn.Linear(self.hidden_size, 1, bias=False))
+		layers.append(nn.Linear(self.hidden_size, 1, bias=True))
 		self.layers = nn.Sequential(*layers)
 		self.base_acc = nn.Parameter(torch.zeros(1, device=self.device), requires_grad=False)
 
 		if checkpoint_path is not None and os.path.exists(checkpoint_path):
 			checkpoint = torch.load(checkpoint_path, map_location='cpu')
+			
 			if 'state_dict' in checkpoint:
 				checkpoint = checkpoint['state_dict']
-			self.load_state_dict(checkpoint)
+			'''
+			for key in list(checkpoint.keys()):
+				if 'weight' in key or 'bias' in key:
+					split_key = key.split('.')
+					layer_num = int(int(split_key[0])/2)
+					if layer_num == 3:
+						new_key = 'layers.'+str(layer_num)+'.'+split_key[1]
+					else:
+						new_key = 'layers.'+str(layer_num)+'.0.'+split_key[1]
+					checkpoint[new_key] = checkpoint.pop(key)
+			'''
+			self.load_state_dict(checkpoint,strict=False)
 			print('Loaded checkpoint from %s' % checkpoint_path)
 
 		self.layers = self.layers.to(self.device)

@@ -191,3 +191,19 @@ horovodrun -np 32 -H <server1_ip>:8,<server2_ip>:8,<server3_ip>:8,<server4_ip>:8
 [AMC: AutoML for Model Compression and Acceleration on Mobile Devices](https://arxiv.org/pdf/1802.03494.pdf) (ECCV’18)
 
 [HAQ: Hardware-Aware Automated Quantization](https://arxiv.org/pdf/1811.08886.pdf)  (CVPR’19, oral)
+
+
+## How to use
+We would like to use [import the module from local directory rather than pip-install library](https://stackoverflow.com/questions/55505023/how-to-import-a-module-from-local-directory-rather-than-pip-installed-library)
+
+First create virtual env
+`$ virtualenv dev_env`
+
+Then activate it
+`$ source dev_env/bin/activate`
+
+And reload to package in pip so that pip is referencing the local package
+`$ pip install -e .`
+
+After setting up, next time we only need to run `$ source dev_env/bin/activate` to activate the virtual env
+

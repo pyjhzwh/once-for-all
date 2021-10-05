@@ -93,6 +93,7 @@ celerybeat-schedule
 env/
 venv/
 ENV/
+dev_env/
 env.bak/
 venv.bak/
 
@@ -114,5 +115,9 @@ venv.bak/
 *.iml
 /bash/distributed_imagenet.sh
 
-dev_env/
+
 tutorial/.torch/
+
+# Checkpoints
+.torch/
+exp/

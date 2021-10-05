@@ -11,11 +11,10 @@ import math
 import copy
 #from matplotlib import pyplot as plt
 from ofa.nas.search_algorithm import EvolutionFinder
+#from ofa.tutorial import AccuracyPredictor
 
 
-ofa_network = ofa_net('ofa_resnet50_expand', pretrained=False)
-state_dict = torch.load('../exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
-ofa_network.load_state_dict(state_dict)
+ofa_network = ofa_net('ofa_mbv3_d234_e346_k357_w1.0', pretrained=True)
 # set random seed
 random_seed = 2
 random.seed(random_seed)
@@ -25,17 +24,23 @@ print('Successfully imported all packages and configured random seed to %d!'%ran
 
 # accuracy predictor
 import torch
-from ofa.nas.accuracy_predictor import AccuracyPredictor, ResNetArchEncoder
+from ofa.nas.accuracy_predictor import AccuracyPredictor, MobileNetArchEncoder
 from ofa.utils import download_url
 
 image_size_list = [128, 144, 160, 176, 192, 224, 240, 256]
-arch_encoder = ResNetArchEncoder(
-	image_size_list=image_size_list, depth_list=ofa_network.depth_list, expand_list=ofa_network.expand_ratio_list,
-    width_mult_list=ofa_network.width_mult_list, base_depth_list=ofa_network.BASE_DEPTH_LIST
+arch_encoder = MobileNetArchEncoder(
+	image_size_list=image_size_list, ks_list=ofa_network.ks_list, depth_list=ofa_network.depth_list, 
+    expand_list=ofa_network.expand_ratio_list
 )
-
+'''
+# accuracy predictor
+acc_predictor = AccuracyPredictor(
+    pretrained=True,
+    device='cuda:0' if torch.cuda.is_available() else 'cpu'
+)
+'''
 acc_predictor_checkpoint_path = download_url(
-    'https://hanlab.mit.edu/files/OnceForAll/tutorial/ofa_resnet50_acc_predictor.pth',
+    'https://hanlab.mit.edu/files/OnceForAll/tutorial/acc_predictor.pth',
     model_dir='~/.ofa/',
 )
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -45,14 +50,14 @@ acc_predictor = AccuracyPredictor(arch_encoder, 400, 3,
 print('The accuracy predictor is ready!')
 print(acc_predictor)
 
-from ofa.nas.efficiency_predictor import ResNet50FLOPsModel
+from ofa.nas.efficiency_predictor import Mbv3FLOPsModel
 
-efficiency_predictor = ResNet50FLOPsModel(ofa_network)
+efficiency_predictor = Mbv3FLOPsModel(ofa_network)
 
-from ofa.nas.memory_predictor import ResNet50WorkingMemModel 
-memory_predictor_baseline = ResNet50WorkingMemModel(ofa_network, 0)
-memory_predictor_ideal = ResNet50WorkingMemModel(ofa_network, 1)
-memory_predictor_self = ResNet50WorkingMemModel(ofa_network, 2)
+from ofa.nas.memory_predictor import Mbv3WorkingMemModel 
+memory_predictor_baseline = Mbv3WorkingMemModel(ofa_network, 0)
+memory_predictor_ideal = Mbv3WorkingMemModel(ofa_network, 1)
+memory_predictor_self = Mbv3WorkingMemModel(ofa_network, 2)
 
 def build_val_transform(size):
     return transforms.Compose([
@@ -66,8 +71,6 @@ def build_val_transform(size):
     ])
 # path to the ImageNet dataset
 imagenet_data_path = '/data2/jiecaoyu/imagenet/imgs/'
-print('The ImageNet dataset files are ready.')
-
 data_loader = torch.utils.data.DataLoader(
     datasets.ImageFolder(
         root=os.path.join(imagenet_data_path, 'val'),

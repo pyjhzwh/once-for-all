@@ -37,7 +37,7 @@ class Mbv3WorkingMemModel(BaseWorkingMemModel):
 
 	def get_workingmem(self, arch_dict):
 		active_net_config, image_size = self.get_active_subnet_config(arch_dict)
-		return MBv3WorkingMemTable.count_workingmem_given_config(active_net_config, image_size)
+		return MBv3WorkingMemTable.count_workingmem_given_config(active_net_config, image_size, self.type)
 
 
 class ResNet50WorkingMemModel(BaseWorkingMemModel):
