@@ -38,7 +38,7 @@ def load_state(model, state_dict):
     return
 
 
-class AverageMeter(object):
+class AverageMeterName(object):
     """Computes and stores the average and current value"""
     def __init__(self, name, fmt=':f'):
         self.name = name

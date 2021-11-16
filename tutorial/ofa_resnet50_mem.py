@@ -13,9 +13,7 @@ import copy
 from ofa.nas.search_algorithm import EvolutionFinder
 
 
-ofa_network = ofa_net('ofa_resnet50_expand', pretrained=False)
-state_dict = torch.load('../exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
-ofa_network.load_state_dict(state_dict)
+ofa_network = ofa_net('ofa_resnet50_expand', pretrained=True)
 # set random seed
 random_seed = 2
 random.seed(random_seed)
@@ -34,10 +32,11 @@ arch_encoder = ResNetArchEncoder(
     width_mult_list=ofa_network.width_mult_list, base_depth_list=ofa_network.BASE_DEPTH_LIST
 )
 
-acc_predictor_checkpoint_path = download_url(
-    'https://hanlab.mit.edu/files/OnceForAll/tutorial/ofa_resnet50_acc_predictor.pth',
-    model_dir='~/.ofa/',
-)
+#acc_predictor_checkpoint_path = download_url(
+#    'https://hanlab.mit.edu/files/OnceForAll/tutorial/ofa_resnet50_acc_predictor.pth',
+#    model_dir='~/.ofa/',
+#)
+acc_predictor_checkpoint_path = './acc_predictor/best.acc_predictor.ckp_origin.pth.tar'
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 acc_predictor = AccuracyPredictor(arch_encoder, 400, 3,
                                   checkpoint_path=acc_predictor_checkpoint_path, device=device)

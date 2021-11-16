@@ -180,6 +180,19 @@ class OFAResNets(ResNets):
 				for idx in block_idx:
 					self.blocks[idx].active_out_channel = self.blocks[idx].out_channel_list[w]
 
+	def get_max_net_config(self):
+		depth = val2list(max(self.depth_list), len(ResNets.BASE_DEPTH_LIST) + 1)
+		expand_ratio = val2list(max(self.expand_ratio_list), len(self.blocks))
+		width_mult = val2list(len(self.width_mult_list) - 1, len(ResNets.BASE_DEPTH_LIST) + 2)
+
+		arch_config = {
+			'd': depth,
+			'e': expand_ratio,
+			'w': width_mult
+		}
+		return arch_config
+
+
 	def sample_active_subnet(self):
 		# sample expand ratio
 		expand_setting = []

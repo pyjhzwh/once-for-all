@@ -14,23 +14,18 @@ from util import *
 
 from ofa.nas.accuracy_predictor import *
 from ofa.model_zoo import ofa_net
-from ofa.imagenet_classification.run_manager.distributed_run_manager import DistributedRunManager
-from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig
-from ofa.utils import download_url, MyRandomResizedCrop
-from ofa.utils import AverageMeter, cross_entropy_loss_with_soft_target
-from ofa.utils import DistributedMetric, list_mean, subset_mean, val2list, MyRandomResizedCrop
-from ofa.imagenet_classification.run_manager import DistributedRunManager
+from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManager
 from ofa.nas.accuracy_predictor import AccuracyPredictor, ResNetArchEncoder
 
 
 def test(val_loader, model, epoch, args, stats=None):
-    batch_time = AverageMeter('Time', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    batch_time = AverageMeterName('Time', ':6.3f')
+    losses = AverageMeterName('Loss', ':.4e')
+    #top1 = AverageMeterName('Acc@1', ':6.2f')
+    #top5 = AverageMeterName('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(val_loader),
-        [batch_time, losses, top1, top5],
+        [batch_time, losses],
         prefix='Test: ')
 
     # switch to evaluate mode
@@ -51,10 +46,10 @@ def test(val_loader, model, epoch, args, stats=None):
             loss = criterion(output, target)
 
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            #acc1, acc5 = accuracy(output, target, topk=(1, 5))
             losses.update(loss.item(), images.size(0))
-            top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
+            #top1.update(acc1[0], images.size(0))
+            #top5.update(acc5[0], images.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -65,22 +60,22 @@ def test(val_loader, model, epoch, args, stats=None):
 
 
         # TODO: this should also be done with the ProgressMeter
-        print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
-              .format(top1=top1, top5=top5))
+        #print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
+        #      .format(top1=top1, top5=top5))
 
 
-    return top1.avg
+    return losses.avg
 
 
 def train(train_loader,optimizer, model, epoch, args, stats=None):
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time = AverageMeter('Data', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    batch_time = AverageMeterName('Time', ':6.3f')
+    data_time = AverageMeterName('Data', ':6.3f')
+    losses = AverageMeterName('Loss', ':.4e')
+    #top1 = AverageMeterName('Acc@1', ':6.2f')
+    #top5 = AverageMeterName('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, top1, top5],
+        [batch_time, data_time, losses],
         prefix="Epoch: [{}]".format(epoch))
     end = time.time()
 
@@ -94,14 +89,13 @@ def train(train_loader,optimizer, model, epoch, args, stats=None):
 
         # compute output
         output= model(images)
-        #rint('stats',stats)
         loss = criterion(output, target)
 
         # measure accuracy and record loss
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        #acc1, acc5 = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), images.size(0))
-        top1.update(acc1[0], images.size(0))
-        top5.update(acc5[0], images.size(0))
+        #top1.update(acc1[0], images.size(0))
+        #top5.update(acc5[0], images.size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -136,7 +130,7 @@ if __name__=='__main__':
     num_gpus = hvd.size()
 
     parser = argparse.ArgumentParser(description='Train acc_predictor for once-for-all')
-    parser.add_argument('--epochs', type=int, default=450, metavar='N',
+    parser.add_argument('--epochs', type=int, default=100, metavar='N',
             help='number of epochs to train (default: 450)')
     parser.add_argument('--lr_epochs', type=int, default=100, metavar='N',
             help='number of epochs to change lr (default: 100)')
@@ -162,7 +156,7 @@ if __name__=='__main__':
     args.valid_size = 10000
 
     args.opt_type = 'adam'
-    args.base_lr = 1e-3
+    args.lr = 1e-3
     args.momentum = 0.9
     args.weight_decay = 1e-4
     args.no_nesterov = False
@@ -171,10 +165,10 @@ if __name__=='__main__':
     args.validation_frequency = 1
     args.print_frequency = 10
 
-    args.n_worker = 8
+    args.n_workers = 8
     args.resize_scale = 0.08
     args.distort_color = 'tf'
-    args.image_size = '128, 144, 160, 176, 192, 224, 240, 256'
+    args.image_size = '128, 160, 192, 224'
     args.continuous_size = True
     args.not_sync_distributed_image_size = False
 
@@ -187,8 +181,8 @@ if __name__=='__main__':
     args.image_size = [int(img_size) for img_size in args.image_size.split(',')]
     if len(args.image_size) == 1:
         args.image_size = args.image_size[0]
-    MyRandomResizedCrop.CONTINUOUS = args.continuous_size
-    MyRandomResizedCrop.SYNC_DISTRIBUTED = not args.not_sync_distributed_image_size
+    #MyRandomResizedCrop.CONTINUOUS = args.continuous_size
+    #MyRandomResizedCrop.SYNC_DISTRIBUTED = not args.not_sync_distributed_image_size
 
     # build run config from args
     args.lr_schedule_param = None
@@ -196,21 +190,17 @@ if __name__=='__main__':
         'momentum': args.momentum,
         'nesterov': not args.no_nesterov,
     }
-    args.init_lr = args.base_lr * num_gpus  # linearly rescale the learning rate
+    #args.init_lr = args.base_lr * num_gpus  # linearly rescale the learning rate
     args.train_batch_size = args.base_batch_size
     args.test_batch_size = args.base_batch_size * 4
-    run_config = DistributedImageNetRunConfig(**args.__dict__, num_replicas=num_gpus, rank=hvd.rank())
+    run_config = ImagenetRunConfig(test_batch_size=args.test_batch_size, n_worker=args.n_workers)
 
-    # print run config information
-    if hvd.rank() == 0:
-        print('Run config:')
-        for k, v in run_config.config.items():
-            print('\t%s: %s' % (k, v))
-
-    """ Distributed RunManager """
-    ofa_network = ofa_net('ofa_resnet50_expand', pretrained=False)
-    state_dict = torch.load('./exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
-    ofa_network.load_state_dict(state_dict)
+    
+    """ RunManager """
+    ofa_network = ofa_net('ofa_resnet50_expand', pretrained=True)
+    
+    #state_dict = torch.load('./exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
+    #ofa_network.load_state_dict(state_dict)
 
     print('depth_list', ofa_network.depth_list)
     print('expand_ratio_list', ofa_network.expand_ratio_list)
@@ -219,24 +209,23 @@ if __name__=='__main__':
         image_size_list=args.image_size, depth_list=ofa_network.depth_list, expand_list=ofa_network.expand_ratio_list,
         width_mult_list=ofa_network.width_mult_list, base_depth_list=ofa_network.BASE_DEPTH_LIST )
 
-    compression = hvd.Compression.none
-    run_manager = DistributedRunManager(
-        args.path, ofa_network, run_config, compression, is_root=(hvd.rank() == 0)
-    )
-    run_manager.save_config()
-    # hvd broadcast
-    run_manager.broadcast()
+    
 
     '''
     Build Accuracy Predictor Dataset
     '''
-    acc_dataset = AccuracyDataset('./acc_dataset')
+    acc_dataset = AccuracyDataset(args.path)
     if args.gen_dataset:
-        acc_dataset.build_acc_dataset(run_manager, ofa_network)
+        run_manager = RunManager(
+            args.path, ofa_network, run_config, init=False
+        )
+        run_manager.save_config()
+        # hvd broadcast
+        acc_dataset.build_acc_dataset(run_manager, ofa_network, n_arch=1000)
         acc_dataset.merge_acc_dataset()
 
     acc_predictor_train_loader, acc_predictor_valid_loader, acc_predictor_base_acc = \
-        acc_dataset.build_acc_data_loader(arch_encoder)
+        acc_dataset.build_acc_data_loader(arch_encoder, batch_size=args.test_batch_size, n_workers=args.n_workers)
     
     '''
     Train Accuracy Predictor
@@ -245,17 +234,18 @@ if __name__=='__main__':
     acc_predictor = AccuracyPredictor(arch_encoder, 400, 3,
                                   checkpoint_path=None, device=device)
     
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.MSELoss().cuda()
     optimizer = optim.Adam(acc_predictor.parameters(), 
                 lr=args.lr, weight_decay= args.weight_decay)
     
+    bestloss = 10
     for epoch in range(0,args.epochs):
         adjust_learning_rate(optimizer, epoch, args)
         train(acc_predictor_train_loader,optimizer, acc_predictor, epoch, args)
-        acc = test(acc_predictor_valid_loader, acc_predictor, epoch, args)
-        if (acc > bestacc):
-            bestacc = acc
-            save_state(acc_predictor,acc,epoch,args, optimizer, True)
+        testloss = test(acc_predictor_valid_loader, acc_predictor, epoch, args)
+        if (testloss < bestloss):
+            bestloss = testloss
+            save_state(acc_predictor,testloss,epoch,args, optimizer, True)
         else:
-            save_state(acc_predictor,bestacc,epoch,args,optimizer, False)
-        print('best acc so far:{:4.2f}'.format(bestacc))
+            save_state(acc_predictor,testloss,epoch,args,optimizer, False)
+        print('best loss so far:{:4.2f}'.format(bestloss))

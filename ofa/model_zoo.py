@@ -57,16 +57,20 @@ def ofa_net(net_id, pretrained=True):
 		net = OFAResNets(
 			dropout_rate=0, depth_list=[0, 1, 2], expand_ratio_list=[0.1, 0.15, 0.2, 0.25, 0.35], width_mult_list=[0.65, 0.8, 1.0]
 		)
-		net_id = 'ofa_resnet50_d=0+1+2_e=0.2+0.25+0.35_w=0.65+0.8+1.0'
+		net_id = 'ofa_resnet50_d=0+1+2_e=0.1+0.15+0.2+0.25+0.35_w=0.65+0.8+1.0'
 	else:
 		raise ValueError('Not supported: %s' % net_id)
 
 	if pretrained:
-		url_base = 'https://hanlab.mit.edu/files/OnceForAll/ofa_nets/'
-		init = torch.load(
-			download_url(url_base + net_id, model_dir='.torch/ofa_nets'),
-			map_location='cpu')['state_dict']
-		net.load_state_dict(init)
+		if net_id == 'ofa_resnet50_d=0+1+2_e=0.1+0.15+0.2+0.25+0.35_w=0.65+0.8+1.0':
+			init = torch.load('./exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
+			net.load_state_dict(init)
+		else:
+			url_base = 'https://hanlab.mit.edu/files/OnceForAll/ofa_nets/'
+			init = torch.load(
+				download_url(url_base + net_id, model_dir='.torch/ofa_nets'),
+				map_location='cpu')['state_dict']
+			net.load_state_dict(init)
 	return net
 
 

@@ -62,6 +62,7 @@ class AccuracyDataset:
 		else:
 			net_id_list = set()
 			while len(net_id_list) < n_arch:
+				#net_setting = ofa_network.get_max_net_config()
 				net_setting = ofa_network.sample_active_subnet()
 				net_id = net_setting2id(net_setting)
 				net_id_list.add(net_id)
@@ -70,14 +71,17 @@ class AccuracyDataset:
 			json.dump(net_id_list, open(self.net_id_path, 'w'), indent=4)
 
 		image_size_list = [128, 160, 192, 224] if image_size_list is None else image_size_list
+		#image_size_list = [224] if image_size_list is None else image_size_list
 
 		with tqdm(total=len(net_id_list) * len(image_size_list), desc='Building Acc Dataset') as t:
 			for image_size in image_size_list:
 				# load val dataset into memory
 				val_dataset = []
 				run_manager.run_config.data_provider.assign_active_img_size(image_size)
+				'''
 				for images, labels in run_manager.run_config.valid_loader:
 					val_dataset.append((images, labels))
+				'''
 				# save path
 				os.makedirs(self.acc_src_folder, exist_ok=True)
 				acc_save_path = os.path.join(self.acc_src_folder, '%d.dict' % image_size)
@@ -101,14 +105,19 @@ class AccuracyDataset:
 						t.update()
 						continue
 					ofa_network.set_active_subnet(**net_setting)
+					subnet = ofa_network.get_active_subnet(preserve_weight=True)
 					run_manager.reset_running_statistics(ofa_network)
-					net_setting_str = ','.join(['%s_%s' % (
-						key, '%.1f' % list_mean(val) if isinstance(val, list) else val
-					) for key, val in net_setting.items()])
+					#net_setting_str = ','.join(['%s_%s' % (
+					#	key, '%.1f' % list_mean(val) if isinstance(val, list) else val
+					#) for key, val in net_setting.items()])
+					#print('net_setting_str',net_setting_str)
+					#print('subnet',subnet.module_str)
 					loss, (top1, top5) = run_manager.validate(
-						run_str=net_setting_str, net=ofa_network, data_loader=val_dataset, no_logs=True,
+						net=subnet, no_logs=True,
 					)
-					info_val = top1
+					# https://github.com/mit-han-lab/once-for-all/issues/30
+					# the accuracy scale is [0, 1] instead of [0, 100].
+					info_val = top1 / 100
 
 					t.set_postfix({
 						'net_id': net_id,
