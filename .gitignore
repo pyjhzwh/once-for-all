@@ -1,7 +1,11 @@
 .vscode/
 .idea/
 tmp/
+.tmp/
 cache/
+acc_dataset/
+acc_predictor/
+
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template
 # Byte-compiled / optimized / DLL files

@@ -133,7 +133,7 @@ class ConvLayer(My2DLayer):
 
 	def __init__(self, in_channels, out_channels,
 	             kernel_size=3, stride=1, dilation=1, groups=1, bias=False, has_shuffle=False, use_se=False,
-	             use_bn=True, act_func='relu', dropout_rate=0, ops_order='weight_bn_act'):
+	             use_bn=True, act_func='relu', dropout_rate=0, ops_order='weight_bn_act', padding=0):
 		# default normal 3x3_Conv with bn and relu
 		self.kernel_size = kernel_size
 		self.stride = stride
@@ -547,7 +547,7 @@ class ResNetBottleneckBlock(MyModule):
 
 	def __init__(self, in_channels, out_channels,
 	             kernel_size=3, stride=1, expand_ratio=0.25, mid_channels=None, act_func='relu', groups=1,
-	             downsample_mode='avgpool_conv'):
+	             downsample_mode='avgpool_conv', padding=0):
 		super(ResNetBottleneckBlock, self).__init__()
 
 		self.in_channels = in_channels
