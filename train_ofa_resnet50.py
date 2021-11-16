@@ -75,7 +75,7 @@ elif args.task == 'width':
     args.dynamic_batch_size = 1
     # from w=0.65,0.8,1.0 to w=0.5,0.65,0.8,1.0
     if args.phase == 1:
-        args.n_epochs = 10
+        args.n_epochs = 12
         args.base_lr = 3e-2
         args.warmup_epochs = 1
         args.warmup_lr = -1

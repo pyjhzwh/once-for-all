@@ -6,12 +6,118 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 import horovod.torch as hvd
+from tqdm import tqdm
+import random
+import time
+import torch.optim as optim
+from util import *
 
 from ofa.nas.accuracy_predictor import *
 from ofa.model_zoo import ofa_net
 from ofa.imagenet_classification.run_manager.distributed_run_manager import DistributedRunManager
 from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig
 from ofa.utils import download_url, MyRandomResizedCrop
+from ofa.utils import AverageMeter, cross_entropy_loss_with_soft_target
+from ofa.utils import DistributedMetric, list_mean, subset_mean, val2list, MyRandomResizedCrop
+from ofa.imagenet_classification.run_manager import DistributedRunManager
+from ofa.nas.accuracy_predictor import AccuracyPredictor, ResNetArchEncoder
+
+
+def test(val_loader, model, epoch, args, stats=None):
+    batch_time = AverageMeter('Time', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(
+        len(val_loader),
+        [batch_time, losses, top1, top5],
+        prefix='Test: ')
+
+    # switch to evaluate mode
+    model.eval()
+
+
+    with torch.no_grad():
+        end = time.time()
+
+        for i, (images, target) in enumerate(val_loader):
+            #if args.gpu is not None:
+            #    images = images.cuda(args.gpu, non_blocking=True)
+            #target = target.cuda(args.gpu, non_blocking=True)
+            images, target = images.cuda(), target.cuda()
+
+            # compute output
+            output = model(images)
+            loss = criterion(output, target)
+
+            # measure accuracy and record loss
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            losses.update(loss.item(), images.size(0))
+            top1.update(acc1[0], images.size(0))
+            top5.update(acc5[0], images.size(0))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % 10 == 0:
+                progress.display(i)
+
+
+        # TODO: this should also be done with the ProgressMeter
+        print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
+              .format(top1=top1, top5=top5))
+
+
+    return top1.avg
+
+
+def train(train_loader,optimizer, model, epoch, args, stats=None):
+    batch_time = AverageMeter('Time', ':6.3f')
+    data_time = AverageMeter('Data', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(
+        len(train_loader),
+        [batch_time, data_time, losses, top1, top5],
+        prefix="Epoch: [{}]".format(epoch))
+    end = time.time()
+
+    model.train()
+    for i, (images, target) in enumerate(train_loader):
+        # measure data loading time
+        data_time.update(time.time() - end)
+
+        images, target = images.cuda(), target.cuda()
+
+
+        # compute output
+        output= model(images)
+        #rint('stats',stats)
+        loss = criterion(output, target)
+
+        # measure accuracy and record loss
+        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        losses.update(loss.item(), images.size(0))
+        top1.update(acc1[0], images.size(0))
+        top5.update(acc5[0], images.size(0))
+
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        loss.backward()
+
+        optimizer.step()
+        
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+        if i % 100 == 0:
+            progress.display(i,optimizer)
+    
+    print('Finished Training')
+
+    return
 
 
 
@@ -30,12 +136,8 @@ if __name__=='__main__':
     num_gpus = hvd.size()
 
     parser = argparse.ArgumentParser(description='Train acc_predictor for once-for-all')
-    parser.add_argument('--no_cuda', default=False, 
-            help = 'do not use cuda',action='store_true')
     parser.add_argument('--epochs', type=int, default=450, metavar='N',
             help='number of epochs to train (default: 450)')
-    parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                    help='manual epoch number (useful on restarts)')
     parser.add_argument('--lr_epochs', type=int, default=100, metavar='N',
             help='number of epochs to change lr (default: 100)')
     parser.add_argument('--pretrained', default=None, nargs='+',
@@ -44,38 +146,26 @@ if __name__=='__main__':
             and the sencond is the small net)')
     parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
-    parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                    metavar='LR', help='initial learning rate', dest='lr')
-    parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum')
-    parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)',
-                    dest='weight_decay')
-    parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                    default=False, help='evaluate model on validation set')
-    parser.add_argument('--gpu', default=None, type=int,
-                    help='GPU id to use.')
-    parser.add_argument('--arch', action='store', default='resnet20',
-                        help='the CIFAR10 network structure: \
-                        resnet20 | resnet18 | resnet50 | all_cnn_net | alexnet')
-    parser.add_argument('--dataset', action='store', default='cifar10',
-            help='pretrained model: cifar10 | imagenet')
+    parser.add_argument('--gen_dataset', default=False, 
+                    help='seed for initializing training. ')
     args = parser.parse_args()
+
+    # https://github.com/mit-han-lab/once-for-all/issues/30
+
+    args.path='./acc_dataset'
 
     args.manual_seed = 0
 
     args.lr_schedule_type = 'cosine'
 
-    args.base_batch_size = 32
+    args.base_batch_size = 64
     args.valid_size = 10000
 
-    args.opt_type = 'sgd'
+    args.opt_type = 'adam'
+    args.base_lr = 1e-3
     args.momentum = 0.9
+    args.weight_decay = 1e-4
     args.no_nesterov = False
-    args.weight_decay = 3e-5
-    args.label_smoothing = 0.1
-    args.no_decay_keys = 'bn#bias'
-    args.fp16_allreduce = False
 
     args.model_init = 'he_fout'
     args.validation_frequency = 1
@@ -84,20 +174,14 @@ if __name__=='__main__':
     args.n_worker = 8
     args.resize_scale = 0.08
     args.distort_color = 'tf'
-    args.image_size = '128,160,192,224'
+    args.image_size = '128, 144, 160, 176, 192, 224, 240, 256'
     args.continuous_size = True
     args.not_sync_distributed_image_size = False
 
     args.bn_momentum = 0.1
     args.bn_eps = 1e-5
     args.dropout = 0.1
-    args.base_stage_width = 'proxyless'
 
-    args.dy_conv_scaling_mode = 1
-    args.independent_distributed_sampling = False
-
-    args.kd_ratio = 0
-    args.kd_type = 'ce'
 
     # image size
     args.image_size = [int(img_size) for img_size in args.image_size.split(',')]
@@ -113,8 +197,6 @@ if __name__=='__main__':
         'nesterov': not args.no_nesterov,
     }
     args.init_lr = args.base_lr * num_gpus  # linearly rescale the learning rate
-    if args.warmup_lr < 0:
-        args.warmup_lr = args.base_lr
     args.train_batch_size = args.base_batch_size
     args.test_batch_size = args.base_batch_size * 4
     run_config = DistributedImageNetRunConfig(**args.__dict__, num_replicas=num_gpus, rank=hvd.rank())
@@ -126,19 +208,20 @@ if __name__=='__main__':
             print('\t%s: %s' % (k, v))
 
     """ Distributed RunManager """
-    # Horovod: (optional) compression algorithm.
-
     ofa_network = ofa_net('ofa_resnet50_expand', pretrained=False)
-    state_dict = torch.load('../exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
+    state_dict = torch.load('./exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
     ofa_network.load_state_dict(state_dict)
 
+    print('depth_list', ofa_network.depth_list)
+    print('expand_ratio_list', ofa_network.expand_ratio_list)
+    print('width_mult_list', ofa_network.width_mult_list)
     arch_encoder = ResNetArchEncoder(
-        image_size_list=args.image_size_list, depth_list=ofa_network.depth_list, expand_list=ofa_network.expand_ratio_list,
+        image_size_list=args.image_size, depth_list=ofa_network.depth_list, expand_list=ofa_network.expand_ratio_list,
         width_mult_list=ofa_network.width_mult_list, base_depth_list=ofa_network.BASE_DEPTH_LIST )
 
     compression = hvd.Compression.none
     run_manager = DistributedRunManager(
-        args.path, ofa_network, run_config, compression, backward_steps=args.dynamic_batch_size, is_root=(hvd.rank() == 0)
+        args.path, ofa_network, run_config, compression, is_root=(hvd.rank() == 0)
     )
     run_manager.save_config()
     # hvd broadcast
@@ -148,37 +231,31 @@ if __name__=='__main__':
     Build Accuracy Predictor Dataset
     '''
     acc_dataset = AccuracyDataset('./acc_dataset')
-    acc_dataset.build_acc_dataset(run_manager, ofa_network)
-    acc_dataset.merge_acc_dataset()
+    if args.gen_dataset:
+        acc_dataset.build_acc_dataset(run_manager, ofa_network)
+        acc_dataset.merge_acc_dataset()
+
     acc_predictor_train_loader, acc_predictor_valid_loader, acc_predictor_base_acc = \
         acc_dataset.build_acc_data_loader(arch_encoder)
     
     '''
-    train Accuracy Predictor
+    Train Accuracy Predictor
     '''
-    distributed = isinstance(run_manager, DistributedRunManager)
-
-    for epoch in range(run_manager.start_epoch, run_manager.run_config.n_epochs + args.warmup_epochs):
-        train_loss, (train_top1, train_top5) = train(
-            run_manager, args, epoch, args.warmup_epochs, args.warmup_lr)
-
-        if (epoch + 1) % args.validation_frequency == 0:
-            val_loss, val_acc, val_acc5, _val_log = test(run_manager, epoch=epoch, is_test=False)
-            # best_acc
-            is_best = val_acc > run_manager.best_acc
-            run_manager.best_acc = max(run_manager.best_acc, val_acc)
-            if not distributed or run_manager.is_root:
-                val_log = 'Valid [{0}/{1}] loss={2:.3f}, top-1={3:.3f} ({4:.3f})'. \
-                    format(epoch + 1 - args.warmup_epochs, run_manager.run_config.n_epochs, val_loss, val_acc,
-                           run_manager.best_acc)
-                val_log += ', Train top-1 {top1:.3f}, Train loss {loss:.3f}\t'.format(top1=train_top1, loss=train_loss)
-                val_log += _val_log
-                run_manager.write_log(val_log, 'valid', should_print=False)
-
-                run_manager.save_model({
-                    'epoch': epoch,
-                    'best_acc': run_manager.best_acc,
-                    'optimizer': run_manager.optimizer.state_dict(),
-                    'state_dict': run_manager.network.state_dict(),
-                }, is_best=is_best)
-
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    acc_predictor = AccuracyPredictor(arch_encoder, 400, 3,
+                                  checkpoint_path=None, device=device)
+    
+    criterion = nn.CrossEntropyLoss().cuda()
+    optimizer = optim.Adam(acc_predictor.parameters(), 
+                lr=args.lr, weight_decay= args.weight_decay)
+    
+    for epoch in range(0,args.epochs):
+        adjust_learning_rate(optimizer, epoch, args)
+        train(acc_predictor_train_loader,optimizer, acc_predictor, epoch, args)
+        acc = test(acc_predictor_valid_loader, acc_predictor, epoch, args)
+        if (acc > bestacc):
+            bestacc = acc
+            save_state(acc_predictor,acc,epoch,args, optimizer, True)
+        else:
+            save_state(acc_predictor,bestacc,epoch,args,optimizer, False)
+        print('best acc so far:{:4.2f}'.format(bestacc))
