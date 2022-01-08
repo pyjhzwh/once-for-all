@@ -7,8 +7,9 @@ import torch
 import torch.nn as nn
 from collections import OrderedDict
 
+
 from ofa.utils.layers import MBConvLayer, ConvLayer, IdentityLayer, set_layer_from_config
-from ofa.utils.layers import ResNetBottleneckBlock, LinearLayer
+from ofa.utils.layers import ResNetBottleneckBlock, LinearLayer, build_conv_config
 from ofa.utils import MyModule, val2list, get_net_device, build_activation, make_divisible, SEModule, MyNetwork
 from .dynamic_op import DynamicSeparableConv2d, DynamicConv2d, DynamicBatchNorm2d, DynamicSE, DynamicGroupNorm
 from .dynamic_op import DynamicLinear
@@ -182,9 +183,9 @@ class DynamicMBConvLayer(MyModule):
             'stride': self.stride,
             'act_func': self.act_func,
             'use_se': self.use_se,
-            #'inverted_bottleneck': self.inverted_bottleneck,
-			#'depth_conv': self.depth_conv,
-			#'point_linear': self.point_linear,
+            'inverted_bottleneck': None if self.inverted_bottleneck is None else build_conv_config(self.inverted_bottleneck[0]),
+			'depth_conv': build_conv_config(self.depth_conv[0]),
+			'point_linear':  build_conv_config(self.point_linear[0]),
         }
 
     @staticmethod
@@ -260,9 +261,9 @@ class DynamicMBConvLayer(MyModule):
             'mid_channels': self.active_middle_channel(in_channel),
             'act_func': self.act_func,
             'use_se': self.use_se,
-            #'inverted_bottleneck': self.inverted_bottleneck,
-			#'depth_conv': self.depth_conv,
-			#'point_linear': self.point_linear,
+            'inverted_bottleneck': None if self.inverted_bottleneck is None else build_conv_config(self.inverted_bottleneck[0]),
+			'depth_conv': build_conv_config(self.depth_conv[0]),
+			'point_linear':  build_conv_config(self.point_linear[0]),
         }
 
     def re_organize_middle_weights(self, expand_ratio_stage=0):

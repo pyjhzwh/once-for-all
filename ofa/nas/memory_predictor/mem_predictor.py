@@ -52,7 +52,7 @@ def count_conv_mem(workingmem, in_size, layer_config, type=0):
 		layer = Conv_layer_param('input_stem', in_size, in_size, in_channel, layer_config['kernel_size'],
 				layer_config['padding'], layer_config['stride'], out_size, out_size, out_channel)
 		workingmem = max(workingmem, count_selfloop_conv_mem(layer))
-	return workingmem
+	return workingmem, out_size
 
 def count_depth_conv_mem(workingmem, in_size, layer_config, type=0):
 	#layer_config = net_config['first_conv']['first_conv']
@@ -77,7 +77,7 @@ def count_depth_conv_mem(workingmem, in_size, layer_config, type=0):
 		workingmem = max(workingmem, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
 	elif type == 2:
 		workingmem = max(workingmem, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
-	return workingmem
+	return workingmem, out_size
 
 def build_layer_config_from_conv(conv):
 	if isinstance(conv, Conv2d) or isinstance(conv, ConvLayer):
@@ -379,11 +379,13 @@ class MBv3WorkingMemTable(WorkingMemTable):
 		return predicted_latency
 
 	@staticmethod
-	def count_workingmem_given_config(net, image_size=224, type=0):
+	def count_workingmem_given_net(net, image_size=224, type=0):
 		workingmem = 0
 		# first conv
 		layer_config = net.config['first_conv']
+		#print(net.module_str)
 		workingmem = count_conv_mem(workingmem, image_size, layer_config, type)
+		#print('image size', image_size)
 		#print('workingmem', workingmem)
 		# blocks
 		fsize = (image_size + 1) // 2
@@ -434,8 +436,72 @@ class MBv3WorkingMemTable(WorkingMemTable):
 		# classifier
 		#workingmem += count_conv_mem(1, net.config['classifier']['in_features'],
 		#						 net.config['classifier']['out_features'], 1, 1)
-		#exit()
+		#if(workingmem == 676*1024):
+		#	exit()
 		#print('-'*30)
+		return workingmem / 1024  # KB
+
+	@staticmethod
+	def count_workingmem_given_config(net_config, image_size=224, type=0):
+		workingmem = 0
+		# first conv
+		layer_config = net_config['first_conv']
+		#print(net.module_str)
+		workingmem, fsize = count_conv_mem(workingmem, image_size, layer_config, type)
+		print('image size', image_size)
+		print('workingmem', workingmem)
+		# blocks
+		#fsize = (image_size + 1) // 2
+		for block in net_config['blocks']:
+			mb_conv = block['conv']
+			if mb_conv is None:
+				continue
+			shortcut = block['shortcut']
+			prev_fsize = fsize
+			#if isinstance(mb_conv, MBConvLayer) or isinstance(mb_conv, DynamicMBConvLayer):
+			# inverted_bottlenect
+			if mb_conv['inverted_bottleneck']:
+				layer_config = mb_conv['inverted_bottleneck']
+				workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config)
+				print('workingmem', workingmem, layer_config, 'fsize', fsize)
+				stride = layer_config['stride']
+				if isinstance(stride, tuple):
+					stride = stride[0]
+				#fsize = int((fsize - 1) / stride + 1)
+			# depth_conv
+			layer_config = mb_conv['depth_conv']
+			workingmem, fsize = count_depth_conv_mem(workingmem, fsize, layer_config)
+			stride = layer_config['stride']
+			if isinstance(stride, tuple):
+				stride = stride[0]
+			#fsize = int((fsize - 1) / stride + 1)
+			print('workingmem', workingmem, layer_config, 'fsize', fsize)
+			# point_linear
+			layer_config = mb_conv['point_linear']
+			workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config)
+			stride = layer_config['stride']
+			if isinstance(stride, tuple):
+				stride = stride[0]
+			#fsize = int((fsize - 1) / stride + 1)
+			print('workingmem', workingmem, layer_config, 'fsize', fsize)
+			# residual layer
+			if shortcut is not None and type != 0:
+				workingmem += prev_fsize * prev_fsize * shortcut.in_channels
+				#print('workingmem', workingmem, layer_config, 'fsize', fsize)
+		# final expand layer
+		layer_config = net_config['final_expand_layer']
+		workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config, type)
+		# pooling
+		fsize /= 6
+		# feature mix layer
+		layer_config = net_config['feature_mix_layer']
+		workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config, type)
+		# classifier
+		#workingmem += count_conv_mem(1, net.config['classifier']['in_features'],
+		#						 net.config['classifier']['out_features'], 1, 1)
+		if(workingmem == 676*1024 and image_size == 224):
+			exit()
+		print('-'*30)
 		return workingmem / 1024  # KB
 		
 

@@ -44,6 +44,10 @@ def ofa_net(net_id, pretrained=True):
 		net = OFAMobileNetV3(
 			dropout_rate=0, width_mult=1.0, ks_list=[3, 5, 7], expand_ratio_list=[3, 4, 6], depth_list=[2, 3, 4],
 		)
+	elif net_id == 'ofa_mbv3_d234_e2346_k357_w1.0':
+		net = OFAMobileNetV3(
+			dropout_rate=0, width_mult=1.0, ks_list=[3, 5, 7], expand_ratio_list=[2, 3, 4, 6], depth_list=[2, 3, 4],
+		)
 	elif net_id == 'ofa_mbv3_d234_e346_k357_w1.2':
 		net = OFAMobileNetV3(
 			dropout_rate=0, width_mult=1.2, ks_list=[3, 5, 7], expand_ratio_list=[3, 4, 6], depth_list=[2, 3, 4],
@@ -69,6 +73,9 @@ def ofa_net(net_id, pretrained=True):
 			net.load_state_dict(init)
 		elif net_id == 'ofa_resnet50_d=0+1+2_e=0.1+0.15+0.2+0.25+0.35_w=0.65+0.8+1.0':
 			init = torch.load('./exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
+			net.load_state_dict(init)
+		elif  net_id == 'ofa_mbv3_d234_e2346_k357_w1.0':
+			init = torch.load('./exp/MBV3/kernel_depth2kernel_depth_width/phase3/checkpoint/model_best.pth.tar')['state_dict']
 			net.load_state_dict(init)
 		else:
 			url_base = 'https://hanlab.mit.edu/files/OnceForAll/ofa_nets/'

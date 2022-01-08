@@ -17,7 +17,10 @@ class BaseWorkingMemModel:
 
 	def get_active_subnet_config(self, arch_dict):
 		arch_dict = copy.deepcopy(arch_dict)
-		image_size = arch_dict.pop('image_size')
+		if 'image_size' in arch_dict:
+			image_size = arch_dict.pop('image_size')
+		elif 'r' in arch_dict:
+			image_size = arch_dict.pop('r')[0]
 		self.ofa_net.set_active_subnet(**arch_dict)
 		active_net_config = self.ofa_net.get_active_net_config()
 		return active_net_config, image_size
@@ -44,16 +47,16 @@ class ProxylessNASWorkingMemModel(BaseWorkingMemModel):
 
 
 class Mbv3WorkingMemModel(BaseWorkingMemModel):
-	#def get_workingmem(self, arch_dict):
-	#	active_net_config, image_size = self.get_active_subnet_config(arch_dict)
-	#	return MBv3WorkingMemTable.count_workingmem_given_config(active_net_config, image_size, self.type)
 	def get_workingmem(self, arch_dict):
-		active_net, image_size = self.get_active_subnet(arch_dict)
-		return MBv3WorkingMemTable.count_workingmem_given_config(active_net, image_size, self.type)
+		active_net_config, image_size = self.get_active_subnet_config(arch_dict)
+		return MBv3WorkingMemTable.count_workingmem_given_config(active_net_config, image_size, self.type)
+	#def get_workingmem(self, arch_dict):
+	#	active_net, image_size = self.get_active_subnet(arch_dict)
+	#	return MBv3WorkingMemTable.count_workingmem_given_net(active_net, image_size, self.type)
 
 	def predict_workingmem(self, arch_dict):
-		active_net, image_size = self.get_active_subnet(arch_dict)
-		return MBv3WorkingMemTable.count_workingmem_given_config(active_net, image_size, self.type)
+		active_net_config, image_size = self.get_active_subnet_config(arch_dict)
+		return MBv3WorkingMemTable.count_workingmem_given_config(active_net_config, image_size, self.type)
 
 class ResNet50WorkingMemModel(BaseWorkingMemModel):
 	def get_workingmem(self, arch_dict):

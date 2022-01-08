@@ -88,6 +88,17 @@ class DynamicSeparableConv2d(nn.Module):
 		)
 		return y
 
+	def config(self):
+		return {
+			'name': DynamicSeparableConv2d.__name__,
+			'kernel_size': self.active_kernel_size,
+			'stride': self.stride,
+			'padding': get_same_padding(self.active_kernel_size),
+			'dilation': self.dilation,
+			'in_channels': self.max_in_channels,
+			'out_channels': self.max_in_channels,
+		}
+
 
 class DynamicConv2d(nn.Module):
 
@@ -120,6 +131,17 @@ class DynamicConv2d(nn.Module):
 		filters = self.conv.weight_standardization(filters) if isinstance(self.conv, MyConv2d) else filters
 		y = F.conv2d(x, filters, None, self.stride, padding, self.dilation, 1)
 		return y
+	
+	def config(self):
+		return {
+			'name': DynamicConv2d.__name__,
+			'kernel_size': self.kernel_size,
+			'stride': self.stride,
+			'padding': self.padding,
+			'dilation': self.dilation,
+			'in_channels': self.max_in_channels,
+			'out_channels': self.active_out_channel,
+		}
 
 
 class DynamicGroupConv2d(nn.Module):

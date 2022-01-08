@@ -41,7 +41,7 @@ parser.add_argument(
     '--net',
     metavar='OFANET',
     default='ofa_resnet50',
-    choices=['ofa_mbv3_d234_e346_k357_w1.0', 'ofa_mbv3_d234_e346_k357_w1.2', 'ofa_proxyless_d234_e346_k357_w1.3',
+    choices=['ofa_mbv3_d234_e346_k357_w1.0', 'ofa_mbv3_d234_e2346_k357_w1.0', 'ofa_mbv3_d234_e346_k357_w1.2', 'ofa_proxyless_d234_e346_k357_w1.3',
              'ofa_resnet50', 'ofa_resnet50_expand'],
     help='OFA networks')
 

@@ -7,10 +7,45 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .common_tools import min_divisible_value
+from torch.nn.modules.conv import Conv2d
+#from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicConv2d, DynamicSeparableConv2d
+
 
 __all__ = ['MyModule', 'MyNetwork', 'init_models', 'set_bn_param', 'get_bn_param', 'replace_bn_with_gn',
-           'MyConv2d', 'replace_conv2d_with_my_conv2d']
+           'MyConv2d', 'replace_conv2d_with_my_conv2d', 'build_conv_config']
 
+def build_conv_config(conv):
+	if isinstance(conv, Conv2d):
+		return {
+			'in_channels' : conv.in_channels,
+			'out_channels': conv.out_channels,
+			'kernel_size': conv.kernel_size,
+			'stride': conv.stride,
+			'padding': conv.padding,
+			'dilation': conv.dilation
+		}
+	else:
+		return conv.config()
+	'''
+	elif isinstance(conv, DynamicConv2d):
+		return {
+			'in_channels' : conv.max_in_channels,
+			'out_channels': conv.active_out_channel,
+			'kernel_size': conv.kernel_size,
+			'stride': conv.stride,
+			'padding': conv.padding,
+			'dilation': conv.dilation
+		}
+	elif isinstance(conv, DynamicSeparableConv2d):
+		return {
+			'in_channels' : conv.max_in_channels,
+			'out_channels': conv.max_in_channels,
+			'kernel_size': conv.active_kernel_size,
+			'stride': conv.stride,
+			'padding': 0,
+			'dilation': conv.dilation
+		}
+	'''
 
 def set_bn_param(net, momentum, eps, gn_channel_per_group=None, ws_eps=None, **kwargs):
 	replace_bn_with_gn(net, gn_channel_per_group)

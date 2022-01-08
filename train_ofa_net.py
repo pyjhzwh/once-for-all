@@ -22,12 +22,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--task', type=str, default='depth', choices=[
     'kernel', 'depth', 'expand',
 ])
-parser.add_argument('--phase', type=int, default=1, choices=[1, 2])
+parser.add_argument('--phase', type=int, default=1, choices=[1, 2, 3, 4])
 parser.add_argument('--resume', action='store_true')
 
 args = parser.parse_args()
 if args.task == 'kernel':
-    args.path = 'exp/normal2kernel'
+    args.path = 'exp/MBV3/normal2kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
     args.base_lr = 3e-2
@@ -37,7 +37,7 @@ if args.task == 'kernel':
     args.expand_list = '6'
     args.depth_list = '4'
 elif args.task == 'depth':
-    args.path = 'exp/kernel2kernel_depth/phase%d' % args.phase
+    args.path = 'exp/MBV3/kernel2kernel_depth/phase%d' % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
         args.n_epochs = 25
@@ -56,7 +56,7 @@ elif args.task == 'depth':
         args.expand_list = '6'
         args.depth_list = '2,3,4'
 elif args.task == 'expand':
-    args.path = 'exp/kernel_depth2kernel_depth_width/phase%d' % args.phase
+    args.path = 'exp/MBV3/kernel_depth2kernel_depth_width/phase%d' % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
         args.n_epochs = 25
@@ -66,13 +66,29 @@ elif args.task == 'expand':
         args.ks_list = '3,5,7'
         args.expand_list = '4,6'
         args.depth_list = '2,3,4'
-    else:
+    elif args.phase == 2:
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
         args.ks_list = '3,5,7'
         args.expand_list = '3,4,6'
+        args.depth_list = '2,3,4'
+    elif args.phase == 3:
+        args.n_epochs = 50
+        args.base_lr = 7.5e-3
+        args.warmup_epochs = 5
+        args.warmup_lr = -1
+        args.ks_list = '3,5,7'
+        args.expand_list = '2,3,4,6'
+        args.depth_list = '2,3,4'
+    elif args.phase == 4:
+        args.n_epochs = 50
+        args.base_lr = 7.5e-3
+        args.warmup_epochs = 5
+        args.warmup_lr = -1
+        args.ks_list = '3,5,7'
+        args.expand_list = '1,2,3,4,6'
         args.depth_list = '2,3,4'
 else:
     raise NotImplementedError
@@ -240,9 +256,14 @@ if __name__ == '__main__':
                 'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
                 model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
             )
-        else:
+        elif args.phase == 2:
             args.ofa_checkpoint_path = download_url(
                 'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357',
+                model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+            )
+        elif args.phase == 3:
+            args.ofa_checkpoint_path = download_url(
+                'https://hanlab.mit.edu/files/OnceForAll/ofa_nets/ofa_mbv3_d234_e346_k357_w1.0',
                 model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
             )
         train_elastic_expand(train, distributed_run_manager, args, validate_func_dict)
