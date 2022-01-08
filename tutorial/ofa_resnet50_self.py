@@ -15,7 +15,7 @@ from ofa.imagenet_classification.data_providers.imagenet import ImagenetDataProv
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManager
 
 
-ofa_network = ofa_net('ofa_resnet50', pretrained=True)
+ofa_network = ofa_net('ofa_resnet50_expand', pretrained=True)
 #ofa_network = ofa_net('ofa_resnet50', pretrained=True)
 # set random seed
 random_seed = 2
@@ -89,18 +89,18 @@ run_config = ImagenetRunConfig(test_batch_size=100, n_worker=12)
 """ Hyper-parameters for the evolutionary search process
     You can modify these hyper-parameters to see how they influence the final ImageNet accuracy of the search sub-net.
 """
+
 ######################################
-############ baseline
+############ self-loop
 ######################################
 print('-'*50)
-print('baseline NAS')
+print('self-loop NAS')
 print('-'*50)
 FLOPs_constraint = 5000  # MFLOPs
-workingmem_constraint = 500# KB
+workingmem_constraint = 500 # KB
 P = 100  # The size of population in each generation
 N = 200  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
-
 params = {
     #'constraint_type': target_hardware, # Let's do FLOPs-constrained search
     'efficiency_constraint': FLOPs_constraint,
@@ -108,7 +108,7 @@ params = {
     'mutation_ratio': 0.5, # The ratio of networks that are generated through mutation in generation n >= 2.
     'efficiency_predictor': efficiency_predictor, # To use a predefined efficiency predictor.
     'accuracy_predictor': acc_predictor, # To use a predefined accuracy_predictor predictor.
-    'memory_predictor': memory_predictor_baseline, # To use a predefined working memory predictor
+    'memory_predictor': memory_predictor_ideal, # To use a predefined working memory predictor
     'population_size': P,
     'max_time_budget': N,
     'parent_ratio': r,
@@ -133,7 +133,6 @@ _, net_config, FLOPS, workingmem = best_info
 ofa_network.set_active_subnet(w=net_config['w'], d=net_config['d'], e=net_config['e'])
 print('Architecture of the searched sub-net:')
 print(ofa_network.module_str)
-print('image size:', sample_image_size)
 print('FLOPS',FLOPS,'workingmem', workingmem)
 
 subnet = ofa_network.get_active_subnet(preserve_weight=True)
@@ -143,4 +142,3 @@ run_config.data_provider.assign_active_img_size(sample_image_size)
 run_manager.reset_running_statistics(net=subnet)
 loss, (top1, top5) = run_manager.validate(net=subnet)
 print('Results: loss=%.5f,\t top1=%.1f,\t top5=%.1f' % (loss, top1, top5))
-

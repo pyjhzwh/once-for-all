@@ -10,6 +10,7 @@ import random
 import horovod.torch as hvd
 from numpy.core.fromnumeric import sort
 import torch
+from imagenet_classification.networks.resnets import ResNet50
 from ofa.imagenet_classification.elastic_nn.networks.ofa_resnets import OFAResNets
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
@@ -52,8 +53,8 @@ elif args.task == 'expand':
     args.dynamic_batch_size = 2
     # from e=0.2,0.25,0.35 to e=0.15,0.2,0.25,0.35
     if args.phase == 1:
-        args.n_epochs = 8
-        args.base_lr = 2.5e-3
+        args.n_epochs = 20
+        args.base_lr = 1e-5 #1e-2
         args.warmup_epochs = 0
         args.warmup_lr = -1
         args.ks_list = '3'
@@ -62,8 +63,8 @@ elif args.task == 'expand':
         args.depth_list = '0,1,2'
     # from e=0.15,0.2,0.25,0.35 to e=0.1,0.15,0.2,0.25,0.35
     else:
-        args.n_epochs = 8
-        args.base_lr = 2.5e-3
+        args.n_epochs = 25
+        args.base_lr = 3e-3
         args.warmup_epochs = 1
         args.warmup_lr = -1
         args.ks_list = '3'
@@ -75,8 +76,8 @@ elif args.task == 'width':
     args.dynamic_batch_size = 1
     # from w=0.65,0.8,1.0 to w=0.5,0.65,0.8,1.0
     if args.phase == 1:
-        args.n_epochs = 12
-        args.base_lr = 3e-2
+        args.n_epochs = 20
+        args.base_lr = 3e-3
         args.warmup_epochs = 1
         args.warmup_lr = -1
         args.ks_list = '3'
@@ -86,7 +87,7 @@ elif args.task == 'width':
     # from w=0.5,0.65,0.8,1.0 to w=0,1,0.15,0.2,0.25,0.35
     elif args.phase == 2:
         args.n_epochs = 10
-        args.base_lr = 4e-2
+        args.base_lr = 4e-3
         args.warmup_epochs = 1
         args.warmup_lr = -1
         args.ks_list = '3'
@@ -97,9 +98,10 @@ else:
     raise NotImplementedError
 args.manual_seed = 0
 
-args.lr_schedule_type = 'cosine'
+#args.lr_schedule_type = 'cosine'
+args.lr_schedule_type = 'exp'
 
-args.base_batch_size = 32
+args.base_batch_size = 50
 args.valid_size = 10000
 
 args.opt_type = 'sgd'
@@ -198,9 +200,9 @@ if __name__ == '__main__':
     )
     # teacher model
     if args.kd_ratio > 0:
-        args.teacher_model = MobileNetV3Large(
+        args.teacher_model = ResNet50(
             n_classes=run_config.data_provider.n_classes, bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=0, width_mult=1.0, ks=7, expand_ratio=6, depth_param=4,
+            dropout_rate=0, width_mult=1.0, expand_ratio=0.35, depth_param=2,
         )
         args.teacher_model.cuda()
 
@@ -251,6 +253,8 @@ if __name__ == '__main__':
                 'https://hanlab.mit.edu/files/OnceForAll/ofa_nets/ofa_resnet50_d=0+1+2_e=0.2+0.25+0.35_w=0.65+0.8+1.0',
                 model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
             )
+            args.ofa_checkpoint_path = 'back/back3/phase1/checkpoint/model_best.pth.tar'
+            args.resume = True
         else:
             args.ofa_checkpoint_path = 'exp/kernel_depth2expand/phase1/checkpoint/model_best.pth.tar'
         train_elastic_expand(train, distributed_run_manager, args, validate_func_dict)

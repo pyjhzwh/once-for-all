@@ -58,7 +58,7 @@ class OFAMobileNetV3(MobileNetV3):
 		blocks = [first_block]
 		_block_index = 1
 		feature_dim = first_block_dim
-
+		
 		for width, n_block, s, act_func, use_se in zip(width_list[2:], n_block_list[1:],
 		                                               stride_stages[1:], act_stages[1:], se_stages[1:]):
 			self.block_group_info.append([_block_index + i for i in range(n_block)])
@@ -202,6 +202,7 @@ class OFAMobileNetV3(MobileNetV3):
 				block.conv.active_kernel_size = k
 			if e is not None:
 				block.conv.active_expand_ratio = e
+			#print('k',block.conv.active_kernel_size,'e',block.conv.active_expand_ratio)
 
 		for i, d in enumerate(depth):
 			if d is not None:
@@ -287,6 +288,18 @@ class OFAMobileNetV3(MobileNetV3):
 		_subnet = MobileNetV3(first_conv, blocks, final_expand_layer, feature_mix_layer, classifier)
 		_subnet.set_bn_param(**self.get_bn_param())
 		return _subnet
+
+	def get_max_net_config(self):
+		ks_setting=max(self.ks_list)
+		expand_setting=max(self.expand_ratio_list)
+		depth_setting=max(self.depth_list)
+
+		return {
+			'ks': ks_setting,
+			'e': expand_setting,
+			'd': depth_setting,
+		}
+
 
 	def get_active_net_config(self):
 		# first conv

@@ -154,6 +154,7 @@ class ConvLayer(My2DLayer):
 		else:
 			padding[0] *= self.dilation
 			padding[1] *= self.dilation
+		self.padding = padding
 
 		weight_dict = OrderedDict({
 			'conv': nn.Conv2d(
@@ -199,6 +200,7 @@ class ConvLayer(My2DLayer):
 			'name': ConvLayer.__name__,
 			'kernel_size': self.kernel_size,
 			'stride': self.stride,
+			'padding': self.padding,
 			'dilation': self.dilation,
 			'groups': self.groups,
 			'bias': self.bias,
@@ -409,7 +411,7 @@ class MBConvLayer(MyModule):
 
 	def __init__(self, in_channels, out_channels,
 	             kernel_size=3, stride=1, expand_ratio=6, mid_channels=None, act_func='relu6', use_se=False,
-	             groups=None):
+	             groups=None, **argc):
 		super(MBConvLayer, self).__init__()
 
 		self.in_channels = in_channels
@@ -492,6 +494,9 @@ class MBConvLayer(MyModule):
 			'act_func': self.act_func,
 			'use_se': self.use_se,
 			'groups': self.groups,
+			#'inverted_bottleneck': self.inverted_bottleneck,
+			#'depth_conv': self.depth_conv,
+			#'point_linear': self.point_linear,
 		}
 
 	@staticmethod
@@ -547,7 +552,7 @@ class ResNetBottleneckBlock(MyModule):
 
 	def __init__(self, in_channels, out_channels,
 	             kernel_size=3, stride=1, expand_ratio=0.25, mid_channels=None, act_func='relu', groups=1,
-	             downsample_mode='avgpool_conv', padding=0):
+	             downsample_mode='avgpool_conv', padding=0, **args):
 		super(ResNetBottleneckBlock, self).__init__()
 
 		self.in_channels = in_channels

@@ -45,7 +45,7 @@ class RunManager:
             init_models(run_config.model_init)
 
         # net info
-        net_info = get_net_info(self.net, self.run_config.data_provider.data_shape, measure_latency, True)
+        net_info = get_net_info(self.net, self.run_config.data_provider.data_shape, measure_latency, False)
         with open('%s/net_info.txt' % self.path, 'w') as fout:
             fout.write(json.dumps(net_info, indent=4) + '\n')
             # noinspection PyBroadException

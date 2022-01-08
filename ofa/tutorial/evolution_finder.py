@@ -56,8 +56,8 @@ class EvolutionFinder:
 		'note10': [15, 60],
 	}
 
-	def __init__(self, constraint_type, efficiency_constraint,
-	             efficiency_predictor, accuracy_predictor, **kwargs):
+	def __init__(self, efficiency_predictor, accuracy_predictor, memory_predictor, **kwargs):
+		'''
 		self.constraint_type = constraint_type
 		if not constraint_type in self.valid_constraint_range.keys():
 			self.invite_reset_constraint_type()
@@ -65,9 +65,10 @@ class EvolutionFinder:
 		if not (efficiency_constraint <= self.valid_constraint_range[constraint_type][1] and
 		        efficiency_constraint >= self.valid_constraint_range[constraint_type][0]):
 			self.invite_reset_constraint()
-
+		'''
 		self.efficiency_predictor = efficiency_predictor
 		self.accuracy_predictor = accuracy_predictor
+		self.memory_predictor = memory_predictor
 		self.arch_manager = ArchManager()
 		self.num_blocks = self.arch_manager.num_blocks
 		self.num_stages = self.arch_manager.num_stages
@@ -114,6 +115,49 @@ class EvolutionFinder:
 			if efficiency <= constraint:
 				return sample, efficiency
 
+	def random_valid_sample(self, latency_constraint, workingmem_constraint=float('inf')):
+		while True:
+			sample = self.arch_manager.random_sample()
+			efficiency = self.efficiency_predictor.predict_efficiency(sample)
+			workingmem = self.memory_predictor.predict_workingmem(sample)
+			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
+				return sample, efficiency, workingmem
+	def mutate_sample(self, sample, latency_constraint, workingmem_constraint=float('inf')):
+		while True:
+			new_sample = copy.deepcopy(sample)
+
+			if random.random() < self.mutate_prob:
+				self.arch_manager.random_resample_resolution(new_sample)
+
+			for i in range(self.num_blocks):
+				if random.random() < self.mutate_prob:
+					self.arch_manager.random_resample(new_sample, i)
+
+			for i in range(self.num_stages):
+				if random.random() < self.mutate_prob:
+					self.arch_manager.random_resample_depth(new_sample, i)
+
+			efficiency = self.efficiency_predictor.predict_efficiency(new_sample)
+			workingmem = self.memory_predictor.predict_workingmem(new_sample)
+			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
+				return new_sample, efficiency, workingmem
+
+	def crossover_sample(self, sample1, sample2, latency_constraint, workingmem_constraint=float('inf')):
+		while True:
+			new_sample = copy.deepcopy(sample1)
+			for key in new_sample.keys():
+				if not isinstance(new_sample[key], list):
+					new_sample[key] = random.choice([sample1[key], sample2[key]])
+				else:
+					for i in range(len(new_sample[key])):
+						new_sample[key][i] = random.choice([sample1[key][i], sample2[key][i]])
+
+			efficiency = self.efficiency_predictor.predict_efficiency(new_sample)
+			workingmem = self.memory_predictor.predict_workingmem(new_sample)
+			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
+				return new_sample, efficiency, workingmem
+
+	'''
 	def mutate_sample(self, sample):
 		constraint = self.efficiency_constraint
 		while True:
@@ -147,35 +191,39 @@ class EvolutionFinder:
 			efficiency = self.efficiency_predictor.predict_efficiency(new_sample)
 			if efficiency <= constraint:
 				return new_sample, efficiency
-
-	def run_evolution_search(self, verbose=False):
+	'''
+	def run_evolution_search(self, latency_constraint, workingmem_constraint=float('inf'), verbose=False):
 		"""Run a single roll-out of regularized evolution to a fixed time budget."""
 		max_time_budget = self.max_time_budget
 		population_size = self.population_size
 		mutation_numbers = int(round(self.mutation_ratio * population_size))
 		parents_size = int(round(self.parent_ratio * population_size))
-		constraint = self.efficiency_constraint
+		#constraint = self.efficiency_constraint
+		constraint = latency_constraint
 
 		best_valids = [-100]
 		population = []  # (validation, sample, latency) tuples
 		child_pool = []
 		efficiency_pool = []
+		workingmem_pool = []
 		best_info = None
 		if verbose:
 			print('Generate random population...')
 		for _ in range(population_size):
-			sample, efficiency = self.random_sample()
+			sample, efficiency, workingmem = self.random_valid_sample(latency_constraint, workingmem_constraint)
+
 			child_pool.append(sample)
 			efficiency_pool.append(efficiency)
+			workingmem_pool.append(workingmem)
 
 		accs = self.accuracy_predictor.predict_accuracy(child_pool)
 		for i in range(population_size):
-			population.append((accs[i].item(), child_pool[i], efficiency_pool[i]))
+			population.append((accs[i].item(), child_pool[i], efficiency_pool[i], workingmem_pool[i]))
 
 		if verbose:
 			print('Start Evolution...')
 		# After the population is seeded, proceed with evolving the population.
-		for iter in tqdm(range(max_time_budget), desc='Searching with %s constraint (%s)' % (self.constraint_type, self.efficiency_constraint)):
+		for iter in tqdm(range(max_time_budget), desc='Searching with constraint (%s, %s)' % (latency_constraint, workingmem_constraint)):
 			parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
 			acc = parents[0][0]
 			if verbose:
@@ -194,20 +242,24 @@ class EvolutionFinder:
 			for i in range(mutation_numbers):
 				par_sample = population[np.random.randint(parents_size)][1]
 				# Mutate
-				new_sample, efficiency = self.mutate_sample(par_sample)
+				new_sample, efficiency, workingmem = self.mutate_sample(par_sample,
+					latency_constraint, workingmem_constraint)
 				child_pool.append(new_sample)
 				efficiency_pool.append(efficiency)
+				workingmem_pool.append(workingmem)
 
 			for i in range(population_size - mutation_numbers):
 				par_sample1 = population[np.random.randint(parents_size)][1]
 				par_sample2 = population[np.random.randint(parents_size)][1]
 				# Crossover
-				new_sample, efficiency = self.crossover_sample(par_sample1, par_sample2)
+				new_sample, efficiency, workingmem = self.crossover_sample(par_sample1, par_sample2,
+					latency_constraint, workingmem_constraint)
 				child_pool.append(new_sample)
 				efficiency_pool.append(efficiency)
+				workingmem_pool.append(workingmem)
 
 			accs = self.accuracy_predictor.predict_accuracy(child_pool)
 			for i in range(population_size):
-				population.append((accs[i].item(), child_pool[i], efficiency_pool[i]))
+				population.append((accs[i].item(), child_pool[i], efficiency_pool[i], workingmem_pool[i]))
 
 		return best_valids, best_info

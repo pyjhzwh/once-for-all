@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.modules import module
+import math
 
 __all__ = ['AccuracyPredictor']
 
@@ -50,6 +51,17 @@ class AccuracyPredictor(nn.Module):
 			'''
 			self.load_state_dict(checkpoint,strict=False)
 			print('Loaded checkpoint from %s' % checkpoint_path)
+
+		else:
+			for m in self.modules():
+				if isinstance(m, nn.Conv2d):
+					n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+					m.weight.data.normal_(0, math.sqrt(2. / n))
+				elif isinstance(m, nn.BatchNorm2d):
+					m.weight.data.fill_(1)
+					m.bias.data.zero_()
+					#nn.init.constant_(m.weight,1)
+					#nn.init.constant_(m.bias,0)
 
 		self.layers = self.layers.to(self.device)
 

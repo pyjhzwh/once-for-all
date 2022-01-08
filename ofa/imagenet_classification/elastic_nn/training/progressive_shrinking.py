@@ -253,7 +253,7 @@ def train_elastic_expand(train_func, run_manager, args, validate_func_dict):
 	expand_stage_list.sort(reverse=True)
 	n_stages = len(expand_stage_list) - 1
 	current_stage = n_stages - 1
-
+	print('run_manager.start_epoch',run_manager.start_epoch, 'args.resume', args.resume)
 	# load pretrained models
 	if run_manager.start_epoch == 0 and not args.resume:
 		validate_func_dict['expand_ratio_list'] = sorted(dynamic_net.expand_ratio_list)
@@ -263,7 +263,14 @@ def train_elastic_expand(train_func, run_manager, args, validate_func_dict):
 		run_manager.write_log('%.3f\t%.3f\t%.3f\t%s' %
 		                      validate(run_manager, is_test=True, **validate_func_dict), 'valid')
 	else:
+		# if resume from the current expand_ratio_stage, not need to reorganize weights
 		assert args.resume
+		validate_func_dict['expand_ratio_list'] = sorted(dynamic_net.expand_ratio_list)
+
+		load_models(run_manager, dynamic_net, model_path=args.ofa_checkpoint_path)
+		run_manager.write_log('%.3f\t%.3f\t%.3f\t%s' %
+		                      validate(run_manager, is_test=True, **validate_func_dict), 'valid')
+		
 
 	run_manager.write_log(
 		'-' * 30 + 'Supporting Elastic Expand Ratio: %s -> %s' %

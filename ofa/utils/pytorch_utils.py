@@ -196,6 +196,9 @@ def calc_learning_rate(epoch, init_lr, n_epochs, batch=0, nBatch=None, lr_schedu
 		t_total = n_epochs * nBatch
 		t_cur = epoch * nBatch + batch
 		lr = 0.5 * init_lr * (1 + math.cos(math.pi * t_cur / t_total))
+	elif lr_schedule_type == 'exp':
+		k = 0.1
+		lr = init_lr * math.exp(-k*epoch)
 	elif lr_schedule_type is None:
 		lr = init_lr
 	else:

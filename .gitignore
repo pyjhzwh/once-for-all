@@ -5,6 +5,8 @@ tmp/
 cache/
 acc_dataset/
 acc_predictor/
+back/
+*.txt
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template
@@ -12,6 +14,7 @@ acc_predictor/
 __pycache__/
 *.py[cod]
 *$py.class
+*.npy
 
 # C extensions
 *.so

@@ -182,6 +182,9 @@ class DynamicMBConvLayer(MyModule):
             'stride': self.stride,
             'act_func': self.act_func,
             'use_se': self.use_se,
+            #'inverted_bottleneck': self.inverted_bottleneck,
+			#'depth_conv': self.depth_conv,
+			#'point_linear': self.point_linear,
         }
 
     @staticmethod
@@ -257,6 +260,9 @@ class DynamicMBConvLayer(MyModule):
             'mid_channels': self.active_middle_channel(in_channel),
             'act_func': self.act_func,
             'use_se': self.use_se,
+            #'inverted_bottleneck': self.inverted_bottleneck,
+			#'depth_conv': self.depth_conv,
+			#'point_linear': self.point_linear,
         }
 
     def re_organize_middle_weights(self, expand_ratio_stage=0):

@@ -109,7 +109,7 @@ def train(train_loader,optimizer, model, epoch, args, stats=None):
         if i % 100 == 0:
             progress.display(i,optimizer)
     
-    print('Finished Training')
+    #print('Finished Training')
 
     return
 
@@ -130,9 +130,9 @@ if __name__=='__main__':
     num_gpus = hvd.size()
 
     parser = argparse.ArgumentParser(description='Train acc_predictor for once-for-all')
-    parser.add_argument('--epochs', type=int, default=100, metavar='N',
+    parser.add_argument('--epochs', type=int, default=150, metavar='N',
             help='number of epochs to train (default: 450)')
-    parser.add_argument('--lr_epochs', type=int, default=100, metavar='N',
+    parser.add_argument('--lr_epochs', type=int, default=50, metavar='N',
             help='number of epochs to change lr (default: 100)')
     parser.add_argument('--pretrained', default=None, nargs='+',
             help='pretrained model ( for mixtest \
@@ -152,7 +152,7 @@ if __name__=='__main__':
 
     args.lr_schedule_type = 'cosine'
 
-    args.base_batch_size = 64
+    args.batch_size = 1000
     args.valid_size = 10000
 
     args.opt_type = 'adam'
@@ -168,7 +168,7 @@ if __name__=='__main__':
     args.n_workers = 8
     args.resize_scale = 0.08
     args.distort_color = 'tf'
-    args.image_size = '128, 160, 192, 224'
+    args.image_size = '128, 160' #'128, 160, 192, 224'
     args.continuous_size = True
     args.not_sync_distributed_image_size = False
 
@@ -191,9 +191,7 @@ if __name__=='__main__':
         'nesterov': not args.no_nesterov,
     }
     #args.init_lr = args.base_lr * num_gpus  # linearly rescale the learning rate
-    args.train_batch_size = args.base_batch_size
-    args.test_batch_size = args.base_batch_size * 4
-    run_config = ImagenetRunConfig(test_batch_size=args.test_batch_size, n_worker=args.n_workers)
+    run_config = ImagenetRunConfig(test_batch_size=args.batch_size, n_worker=args.n_workers)
 
     
     """ RunManager """
@@ -221,11 +219,11 @@ if __name__=='__main__':
         )
         run_manager.save_config()
         # hvd broadcast
-        acc_dataset.build_acc_dataset(run_manager, ofa_network, n_arch=1000)
+        acc_dataset.build_acc_dataset(run_manager, ofa_network, n_arch=1000, image_size_list=args.image_size)
         acc_dataset.merge_acc_dataset()
 
     acc_predictor_train_loader, acc_predictor_valid_loader, acc_predictor_base_acc = \
-        acc_dataset.build_acc_data_loader(arch_encoder, batch_size=args.test_batch_size, n_workers=args.n_workers)
+        acc_dataset.build_acc_data_loader(arch_encoder, batch_size=args.batch_size, n_workers=args.n_workers)
     
     '''
     Train Accuracy Predictor
@@ -248,4 +246,4 @@ if __name__=='__main__':
             save_state(acc_predictor,testloss,epoch,args, optimizer, True)
         else:
             save_state(acc_predictor,testloss,epoch,args,optimizer, False)
-        print('best loss so far:{:4.2f}'.format(bestloss))
+        #print('best loss so far:{:4.2f}'.format(bestloss))

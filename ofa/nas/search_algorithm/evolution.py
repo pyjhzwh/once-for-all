@@ -89,6 +89,7 @@ class EvolutionFinder:
 			child_pool.append(sample)
 			efficiency_pool.append(efficiency)
 			workingmem_pool.append(workingmem)
+			#print(sample, efficiency, workingmem)
 
 		accs = self.accuracy_predictor.predict_acc(child_pool)
 		for i in range(self.population_size):
@@ -96,6 +97,7 @@ class EvolutionFinder:
 
 		if verbose:
 			print('Start Evolution...')
+			#print('population', population)
 		# After the population is seeded, proceed with evolving the population.
 		with tqdm(total=self.max_time_budget, desc='Searching with constraint (%s,%s)' % 
 					(latency_constraint, workingmem_constraint),
