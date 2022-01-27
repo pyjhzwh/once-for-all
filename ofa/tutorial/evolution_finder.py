@@ -7,13 +7,13 @@ __all__ = ['EvolutionFinder']
 
 
 class ArchManager:
-	def __init__(self):
+	def __init__(self, kenel_size=[3,5,7], expand_ratios = [3,4,6], depths=[2,3,4], resolutions=[160, 176, 192, 208, 224]):
 		self.num_blocks = 20
 		self.num_stages = 5
-		self.kernel_sizes = [3, 5, 7]
-		self.expand_ratios = [3, 4, 6]
-		self.depths = [2, 3, 4]
-		self.resolutions = [160, 176, 192, 208, 224]
+		self.kernel_sizes = kenel_size
+		self.expand_ratios = expand_ratios
+		self.depths = depths
+		self.resolutions = resolutions
 
 	def random_sample(self):
 		sample = {}
@@ -69,7 +69,7 @@ class EvolutionFinder:
 		self.efficiency_predictor = efficiency_predictor
 		self.accuracy_predictor = accuracy_predictor
 		self.memory_predictor = memory_predictor
-		self.arch_manager = ArchManager()
+		self.arch_manager = ArchManager(resolutions=kwargs.get('image_size_list'))
 		self.num_blocks = self.arch_manager.num_blocks
 		self.num_stages = self.arch_manager.num_stages
 
@@ -215,16 +215,21 @@ class EvolutionFinder:
 			child_pool.append(sample)
 			efficiency_pool.append(efficiency)
 			workingmem_pool.append(workingmem)
+			#print('child_pool', child_pool)
+			#print('efficiency_pool', efficiency_pool)
+			#print('workingmem_pool', workingmem_pool)
 
 		accs = self.accuracy_predictor.predict_accuracy(child_pool)
 		for i in range(population_size):
 			population.append((accs[i].item(), child_pool[i], efficiency_pool[i], workingmem_pool[i]))
+		#print('population', population)
 
 		if verbose:
 			print('Start Evolution...')
 		# After the population is seeded, proceed with evolving the population.
 		for iter in tqdm(range(max_time_budget), desc='Searching with constraint (%s, %s)' % (latency_constraint, workingmem_constraint)):
 			parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
+			#print('parents', parents)
 			acc = parents[0][0]
 			if verbose:
 				print('Iter: {} Acc: {}'.format(iter - 1, parents[0][0]))
@@ -232,12 +237,15 @@ class EvolutionFinder:
 			if acc > best_valids[-1]:
 				best_valids.append(acc)
 				best_info = parents[0]
+				#print('-'*30)
+				#print('acc', acc, 'best_info', best_info)
 			else:
 				best_valids.append(best_valids[-1])
 
 			population = parents
 			child_pool = []
 			efficiency_pool = []
+			workingmem_pool = []
 
 			for i in range(mutation_numbers):
 				par_sample = population[np.random.randint(parents_size)][1]
@@ -247,6 +255,10 @@ class EvolutionFinder:
 				child_pool.append(new_sample)
 				efficiency_pool.append(efficiency)
 				workingmem_pool.append(workingmem)
+				#print('mutate', new_sample, efficiency, workingmem )
+				#print('child_pool', child_pool)
+				#print('efficiency_pool', efficiency_pool)
+				#print('workingmem_pool', workingmem_pool)
 
 			for i in range(population_size - mutation_numbers):
 				par_sample1 = population[np.random.randint(parents_size)][1]
@@ -257,9 +269,14 @@ class EvolutionFinder:
 				child_pool.append(new_sample)
 				efficiency_pool.append(efficiency)
 				workingmem_pool.append(workingmem)
+				#print('crossover', new_sample, efficiency, workingmem )
+				#print('child_pool', child_pool)
+				#print('efficiency_pool', efficiency_pool)
+				#print('workingmem_pool', workingmem_pool)
 
 			accs = self.accuracy_predictor.predict_accuracy(child_pool)
 			for i in range(population_size):
 				population.append((accs[i].item(), child_pool[i], efficiency_pool[i], workingmem_pool[i]))
+			#print('population', population)
 
 		return best_valids, best_info

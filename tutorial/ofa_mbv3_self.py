@@ -109,7 +109,7 @@ print('-'*50)
 print('baseline NAS')
 print('-'*50)
 FLOPs_constraint = 5000  # MFLOPs
-workingmem_constraint = 1200# KB
+workingmem_constraint = 1000# KB
 P = 100  # The size of population in each generation
 N = 200  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
@@ -120,7 +120,7 @@ params = {
     'mutation_ratio': 0.5, # The ratio of networks that are generated through mutation in generation n >= 2.
     'efficiency_predictor': efficiency_predictor, # To use a predefined efficiency predictor.
     'accuracy_predictor': acc_predictor, # To use a predefined accuracy_predictor predictor.
-    'memory_predictor': memory_predictor_baseline, # To use a predefined working memory predictor
+    'memory_predictor': memory_predictor_ideal, # To use a predefined working memory predictor
     'population_size': P,
     'max_time_budget': N,
     'parent_ratio': r,
@@ -149,6 +149,10 @@ print('Architecture of the searched sub-net:')
 print(ofa_network.module_str)
 print('image size:', sample_image_size)
 print('FLOPS',FLOPS,'workingmem', workingmem)
+
+from ofa.nas.memory_predictor.mem_predictor import MBv3WorkingMemTable
+active_net_config = ofa_network.get_active_net_config()
+MBv3WorkingMemTable.count_workingmem_given_config(active_net_config,sample_image_size, type=1)
 
 subnet = ofa_network.get_active_subnet(preserve_weight=True)
 run_manager = RunManager('.tmp/eval_subnet', subnet, run_config, init=False)

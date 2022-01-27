@@ -15,7 +15,7 @@ def rm_bn_from_net(net):
 
 
 class FLOPsTable:
-	def __init__(self, pred_type='flops', device='cuda:0', multiplier=1.2, batch_size=64, load_efficiency_table=None):
+	def __init__(self, pred_type='flops', device='cuda:0', multiplier=1.2, batch_size=64, load_efficiency_table=None, resolutions=[160, 176, 192, 208, 224]):
 		assert pred_type in ['flops', 'latency']
 		self.multiplier = multiplier
 		self.pred_type = pred_type
@@ -25,7 +25,7 @@ class FLOPsTable:
 		if load_efficiency_table is not None:
 			self.efficiency_dict = np.load(load_efficiency_table, allow_pickle=True).item()
 		else:
-			self.build_lut(batch_size)
+			self.build_lut(batch_size, resolutions)
 
 	@torch.no_grad()
 	def measure_single_layer_latency(self, layer: nn.Module, input_size: tuple, warmup_steps=10, measure_steps=50):
