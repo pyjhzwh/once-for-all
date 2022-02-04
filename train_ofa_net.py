@@ -76,8 +76,8 @@ elif args.task == 'expand':
         args.depth_list = '2,3,4'
     elif args.phase == 3:
         args.n_epochs = 50
-        args.base_lr = 7.5e-3
-        args.warmup_epochs = 5
+        args.base_lr = 2.5e-3
+        args.warmup_epochs = 0
         args.warmup_lr = -1
         args.ks_list = '3,5,7'
         args.expand_list = '2,3,4,6'

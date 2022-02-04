@@ -8,7 +8,7 @@ import torch
 from ofa.utils import download_url
 from ofa.imagenet_classification.networks import get_net_by_name, proxyless_base
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAProxylessNASNets, OFAResNets
-
+from ofa.imagenet_classification.networks import ResNet50D
 __all__ = [
 	'ofa_specialized', 'ofa_net',
 	'proxylessnas_net', 'proxylessnas_mobile', 'proxylessnas_cpu', 'proxylessnas_gpu',
@@ -64,6 +64,16 @@ def ofa_net(net_id, pretrained=True):
 		)
 		#net_id = 'ofa_resnet50_d=0+1+2_e=0.1+0.15+0.2+0.25+0.35_w=0.65+0.8+1.0'
 		net_id = 'ofa_resnet50_d=0+1+2_e=0.15+0.2+0.25+0.35_w=0.65+0.8+1.0'
+	elif net_id == 'ofa_resnet50_width':
+		net = OFAResNets(
+			dropout_rate=0, depth_list=[0, 1, 2], expand_ratio_list=[0.2, 0.25, 0.35], width_mult_list=[0.5, 0.65, 0.8, 1.0]
+		)
+		net_id = 'ofa_resnet50_d=0+1+2_e=0.15+0.2+0.25+0.35_w=0.5+0.65+0.8+1.0'
+	elif net_id == 'resnet50d':
+		net = ResNet50D(
+            dropout_rate=0, width_mult=1.0, expand_ratio=0.25, depth_param=None, pretrained=pretrained
+        )
+		net_id = 'resnet50_d=N_e=0.25_w=1.0'
 	else:
 		raise ValueError('Not supported: %s' % net_id)
 
@@ -74,9 +84,15 @@ def ofa_net(net_id, pretrained=True):
 		elif net_id == 'ofa_resnet50_d=0+1+2_e=0.1+0.15+0.2+0.25+0.35_w=0.65+0.8+1.0':
 			init = torch.load('./exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar')['state_dict']
 			net.load_state_dict(init)
+		elif net_id == 'ofa_resnet50_d=0+1+2_e=0.15+0.2+0.25+0.35_w=0.5+0.65+0.8+1.0':
+			init = torch.load('./exp/width_mult/phase1/checkpoint/model_best.pth.tar')['state_dict']
+			net.load_state_dict(init)
 		elif  net_id == 'ofa_mbv3_d234_e2346_k357_w1.0':
 			init = torch.load('./exp/MBV3/kernel_depth2kernel_depth_width/phase3/checkpoint/model_best.pth.tar')['state_dict']
 			net.load_state_dict(init)
+		elif net_id == 'resnet50_d=N_e=0.25_w=1.0':
+			init = torch.load('.torch/ofa_nets/resnet50d_ra2-464e36ba.pth')
+			net.load_state_dict_match_name(init)
 		else:
 			url_base = 'https://hanlab.mit.edu/files/OnceForAll/ofa_nets/'
 			init = torch.load(

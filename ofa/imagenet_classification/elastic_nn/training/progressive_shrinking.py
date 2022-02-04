@@ -201,8 +201,14 @@ def train(run_manager, args, validate_func=None):
 
 def load_models(run_manager, dynamic_net, model_path=None):
 	# specify init path
-	init = torch.load(model_path, map_location='cpu')['state_dict']
-	dynamic_net.load_state_dict(init)
+	pretrained_model = torch.load(model_path, map_location='cpu')
+	if 'state_dict' in pretrained_model:
+		pretrained_model = pretrained_model['state_dict']
+	init = pretrained_model
+	if 'ofa_nets' not in model_path:
+		dynamic_net.load_state_dict(init)
+	else:
+		dynamic_net.load_state_dict_match_name(init)
 	run_manager.write_log('Loaded init from %s' % model_path, 'valid')
 
 
@@ -325,3 +331,7 @@ def train_elastic_width_mult(train_func, run_manager, args, validate_func_dict):
 		run_manager, args,
 		lambda _run_manager, epoch, is_test: validate(_run_manager, epoch, is_test, **validate_func_dict)
 	)
+	# test
+	run_manager.write_log('%.3f\t%.3f\t%.3f\t%s' %
+		                      validate(run_manager, is_test=True, **validate_func_dict), 'valid')
+	

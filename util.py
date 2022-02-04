@@ -5,7 +5,7 @@ import shutil
 import torch
 
 def save_state(model, best_acc, epoch, args,optimizer, isbest):
-    dirpath = './acc_predictor/'
+    dirpath = './saved_models/'
     suffix = '.ckp_origin.pth.tar'
     state = {
             'acc': best_acc,
@@ -14,7 +14,7 @@ def save_state(model, best_acc, epoch, args,optimizer, isbest):
             'optimizer': optimizer.state_dict(),
             'isbest': isbest
             }
-    filename = 'acc_predictor'+suffix
+    filename = 'resnet50d'+suffix
     torch.save(state,dirpath+filename)
     if isbest:
         shutil.copyfile(dirpath+filename, dirpath+'best.'+filename)

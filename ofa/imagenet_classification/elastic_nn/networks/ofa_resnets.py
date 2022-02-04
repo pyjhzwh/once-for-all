@@ -5,6 +5,7 @@ from ofa.imagenet_classification.elastic_nn.modules.dynamic_layers import Dynami
 from ofa.utils.layers import IdentityLayer, ResidualBlock
 from ofa.imagenet_classification.networks import ResNets
 from ofa.utils import make_divisible, val2list, MyNetwork
+from ofa.utils.layers import build_conv_config, build_pool_config
 
 __all__ = ['OFAResNets']
 
@@ -34,7 +35,6 @@ class OFAResNets(ResNets):
 			stage_width_list[i] = [
 				make_divisible(width * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
 			]
-
 		n_block_list = [base_depth + max(self.depth_list) for base_depth in ResNets.BASE_DEPTH_LIST]
 		stride_list = [1, 2, 2, 2]
 
@@ -123,6 +123,7 @@ class OFAResNets(ResNets):
 			'input_stem': [
 				layer.config for layer in self.input_stem
 			],
+			'max_pooling': build_pool_config(self.max_pooling),
 			'blocks': [
 				block.config for block in self.blocks
 			],
@@ -160,6 +161,7 @@ class OFAResNets(ResNets):
 		depth = val2list(d, len(ResNets.BASE_DEPTH_LIST) + 1)
 		expand_ratio = val2list(e, len(self.blocks))
 		width_mult = val2list(w, len(ResNets.BASE_DEPTH_LIST) + 2)
+		#print('w', w, 'width_mult', width_mult)
 
 		for block, e in zip(self.blocks, expand_ratio):
 			if e is not None:
@@ -271,6 +273,7 @@ class OFAResNets(ResNets):
 			'input_stem': input_stem_config,
 			'blocks': blocks_config,
 			'classifier': classifier_config,
+			'max_pooling': build_pool_config(self.max_pooling),
 		}
 
 	""" Width Related Methods """

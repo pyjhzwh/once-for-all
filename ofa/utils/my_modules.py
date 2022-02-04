@@ -2,17 +2,19 @@
 # Han Cai, Chuang Gan, Tianzhe Wang, Zhekai Zhang, Song Han
 # International Conference on Learning Representations (ICLR), 2020.
 
+import imp
 import math
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .common_tools import min_divisible_value
 from torch.nn.modules.conv import Conv2d
+from torch.nn.modules.pooling import MaxPool2d, AvgPool2d
 #from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicConv2d, DynamicSeparableConv2d
 
 
 __all__ = ['MyModule', 'MyNetwork', 'init_models', 'set_bn_param', 'get_bn_param', 'replace_bn_with_gn',
-           'MyConv2d', 'replace_conv2d_with_my_conv2d', 'build_conv_config']
+           'MyConv2d', 'replace_conv2d_with_my_conv2d', 'build_conv_config', 'build_pool_config']
 
 def build_conv_config(conv):
 	if isinstance(conv, Conv2d):
@@ -46,6 +48,17 @@ def build_conv_config(conv):
 			'dilation': conv.dilation
 		}
 	'''
+
+def build_pool_config(pool):
+	if isinstance(pool, MaxPool2d) or isinstance(pool, AvgPool2d):
+		return {
+			#'in_channels' : pool.in_channels,
+			'kernel_size': pool.kernel_size,
+			'stride': pool.stride,
+			'padding': pool.padding,
+		}
+	else:
+		return {}
 
 def set_bn_param(net, momentum, eps, gn_channel_per_group=None, ws_eps=None, **kwargs):
 	replace_bn_with_gn(net, gn_channel_per_group)

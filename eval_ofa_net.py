@@ -42,7 +42,7 @@ parser.add_argument(
     metavar='OFANET',
     default='ofa_resnet50',
     choices=['ofa_mbv3_d234_e346_k357_w1.0', 'ofa_mbv3_d234_e2346_k357_w1.0', 'ofa_mbv3_d234_e346_k357_w1.2', 'ofa_proxyless_d234_e346_k357_w1.3',
-             'ofa_resnet50', 'ofa_resnet50_expand'],
+             'ofa_resnet50', 'ofa_resnet50_expand',  'ofa_resnet50_width', 'resnet50d'],
     help='OFA networks')
 
 args = parser.parse_args()
@@ -58,18 +58,21 @@ ImagenetDataProvider.DEFAULT_PATH = args.path
 ofa_network = ofa_net(args.net, pretrained=True)
 run_config = ImagenetRunConfig(test_batch_size=args.batch_size, n_worker=args.workers)
 
-""" Set full network
-"""
-ofa_network.set_max_net()
-arch_config = ofa_network.get_max_net_config()
-print('arch_config', arch_config)
-subnet = ofa_network.get_active_subnet(preserve_weight=True)
+if "ofa" in args.net:
+    """ Set full network
+    """
+    ofa_network.set_max_net()
+    arch_config = ofa_network.get_max_net_config()
+    print('arch_config', arch_config)
+    subnet = ofa_network.get_active_subnet(preserve_weight=True)
+else:
+    subnet = ofa_network
 """ Test full network
 """
 run_manager = RunManager('.tmp/eval_subnet', subnet, run_config, init=False)
 # assign image size: 128, 132, ..., 224
 run_config.data_provider.assign_active_img_size(224)
-run_manager.reset_running_statistics(net=subnet)
+#run_manager.reset_running_statistics(net=subnet)
 
 print('Test random subnet:')
 print(subnet.module_str)

@@ -10,13 +10,12 @@ import random
 import horovod.torch as hvd
 from numpy.core.fromnumeric import sort
 import torch
-from imagenet_classification.networks.resnets import ResNet50
 from ofa.imagenet_classification.elastic_nn.networks.ofa_resnets import OFAResNets
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
 from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig
-from ofa.imagenet_classification.networks import MobileNetV3Large
+from ofa.imagenet_classification.networks import ResNet50D
 from ofa.imagenet_classification.run_manager.distributed_run_manager import DistributedRunManager
 from ofa.utils import download_url, MyRandomResizedCrop
 from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import load_models
@@ -49,7 +48,7 @@ if args.task == 'depth':
         args.depth_list = '0,1,2,3'
     '''
 elif args.task == 'expand':
-    args.path = 'exp/kernel_depth2expand/phase%d' % args.phase
+    args.path = 'exp/expand/phase%d' % args.phase
     args.dynamic_batch_size = 2
     # from e=0.2,0.25,0.35 to e=0.15,0.2,0.25,0.35
     if args.phase == 1:
@@ -72,7 +71,7 @@ elif args.task == 'expand':
         args.expand_list = '0.1,0.15,0.2,0.25,0.35'
         args.depth_list = '0,1,2'
 elif args.task == 'width':
-    args.path = 'exp/expand2width_mult/phase%d' % args.phase
+    args.path = 'exp/width_mult/phase%d' % args.phase
     args.dynamic_batch_size = 1
     # from w=0.65,0.8,1.0 to w=0.5,0.65,0.8,1.0
     if args.phase == 1:
@@ -82,7 +81,7 @@ elif args.task == 'width':
         args.warmup_lr = -1
         args.ks_list = '3'
         args.width_mult_list = '0.5,0.65,0.8,1.0'
-        args.expand_list = '0.1,0.15,0.2,0.25,0.35'
+        args.expand_list = '0.2,0.25,0.35'
         args.depth_list = '0,1,2'
     # from w=0.5,0.65,0.8,1.0 to w=0,1,0.15,0.2,0.25,0.35
     elif args.phase == 2:
@@ -92,7 +91,7 @@ elif args.task == 'width':
         args.warmup_lr = -1
         args.ks_list = '3'
         args.width_mult_list = '0.35,0.5,0.65,0.8,1.0'
-        args.expand_list = '0.1,0.15,0.2,0.25,0.35'
+        args.expand_list = '0.2,0.25,0.35'
         args.depth_list = '0,1,2'
 else:
     raise NotImplementedError
@@ -131,7 +130,7 @@ args.base_stage_width = 'proxyless'
 args.dy_conv_scaling_mode = 1
 args.independent_distributed_sampling = False
 
-args.kd_ratio = 0
+args.kd_ratio = 0.5
 args.kd_type = 'ce'
 
 
@@ -147,6 +146,7 @@ if __name__ == '__main__':
     #    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
     #    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
     #)
+    args.teacher_path = '.torch/ofa_nets/resnet50d_ra2-464e36ba.pth'
 
     num_gpus = hvd.size()
 
@@ -200,9 +200,9 @@ if __name__ == '__main__':
     )
     # teacher model
     if args.kd_ratio > 0:
-        args.teacher_model = ResNet50(
+        args.teacher_model = ResNet50D(
             n_classes=run_config.data_provider.n_classes, bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=0, width_mult=1.0, expand_ratio=0.35, depth_param=2,
+            dropout_rate=0, width_mult=1.0, expand_ratio=0.25, depth_param=None,
         )
         args.teacher_model.cuda()
 
@@ -261,8 +261,11 @@ if __name__ == '__main__':
     elif args.task == 'width':
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_width_mult
         if args.phase == 1:
-            args.ofa_checkpoint_path = 'exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar'
-            
+            #args.ofa_checkpoint_path = 'exp/kernel_depth2expand/phase2/checkpoint/model_best.pth.tar'
+            args.ofa_checkpoint_path = download_url(
+                'https://hanlab.mit.edu/files/OnceForAll/ofa_nets/ofa_resnet50_d=0+1+2_e=0.2+0.25+0.35_w=0.65+0.8+1.0',
+                model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+            )
         else:
             args.ofa_checkpoint_path = 'exp/expand2width_mult/phase1/checkpoint/model_best.pth.tar'
         train_elastic_width_mult(train, distributed_run_manager, args, validate_func_dict)

@@ -2,6 +2,8 @@
 # Han Cai, Chuang Gan, Tianzhe Wang, Zhekai Zhang, Song Han
 # International Conference on Learning Representations (ICLR), 2020.
 
+from re import M
+from typing import List
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_layers import DynamicMBConvLayer, DynamicConv2d, DynamicSeparableConv2d
 from ofa.utils.layers import ConvLayer
 from torch.nn.modules.conv import Conv2d
@@ -26,7 +28,23 @@ def count_selfloop_conv_mem(conv_layer_param):
 	mem_planner = MemoryAllocation(conv_layer_param)
 	return mem_planner.actual_mem_size()
 
-def count_conv_mem(workingmem, in_size, layer_config, type=0):
+def count_pool_mem(in_size, layer_config, channel, type=0):
+	padding = layer_config['padding']
+	kernel_size = layer_config['kernel_size']
+	stride = layer_config['stride']
+	out_size = int((in_size + 2 * padding - kernel_size) / stride + 1)
+	
+	if type == 0:
+		workingmem = count_baseline_conv_mem(in_size, out_size,channel,channel)
+	elif type == 1:
+		workingmem = count_ideal_conv_mem(in_size, out_size,channel,channel)
+	elif type == 2:
+		layer = Conv_layer_param('input_stem', in_size, in_size, channel, kernel_size,
+				padding, stride, out_size, out_size, channel)
+		workingmem = count_selfloop_conv_mem(layer)
+	return workingmem, out_size
+
+def count_conv_mem(in_size, layer_config, type=0):
 	#layer_config = net_config['first_conv']['first_conv']
 	in_channel = layer_config['in_channels']
 	out_channel = layer_config['out_channels']
@@ -45,16 +63,17 @@ def count_conv_mem(workingmem, in_size, layer_config, type=0):
 	out_size = int((in_size + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1)
 	
 	if type == 0:
-		workingmem = max(workingmem, count_baseline_conv_mem(in_size, out_size,in_channel,out_channel))
+		workingmem = count_baseline_conv_mem(in_size, out_size,in_channel,out_channel)
 	elif type == 1:
-		workingmem = max(workingmem, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
+		#print(in_size, out_size,in_channel,out_channel, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
+		workingmem = count_ideal_conv_mem(in_size, out_size,in_channel,out_channel)
 	elif type == 2:
 		layer = Conv_layer_param('input_stem', in_size, in_size, in_channel, layer_config['kernel_size'],
 				layer_config['padding'], layer_config['stride'], out_size, out_size, out_channel)
-		workingmem = max(workingmem, count_selfloop_conv_mem(layer))
+		workingmem = count_selfloop_conv_mem(layer)
 	return workingmem, out_size
 
-def count_depth_conv_mem(workingmem, in_size, layer_config, type=0):
+def count_depth_conv_mem(in_size, layer_config, type=0):
 	#layer_config = net_config['first_conv']['first_conv']
 	in_channel = layer_config['in_channels']
 	out_channel = layer_config['out_channels']
@@ -72,11 +91,12 @@ def count_depth_conv_mem(workingmem, in_size, layer_config, type=0):
 		stride = stride[0] 
 	out_size = int((in_size + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1)	
 	if type == 0:
-		workingmem = max(workingmem, count_baseline_conv_mem(in_size, out_size,in_channel,out_channel))
+		workingmem = count_baseline_conv_mem(in_size, out_size,in_channel,out_channel)
 	elif type == 1:
-		workingmem = max(workingmem, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
+		#print(in_size, out_size,in_channel,out_channel, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
+		workingmem = count_ideal_conv_mem(in_size, out_size,in_channel,out_channel)
 	elif type == 2:
-		workingmem = max(workingmem, count_ideal_conv_mem(in_size, out_size,in_channel,out_channel))
+		workingmem = count_ideal_conv_mem(in_size, out_size,in_channel,out_channel)
 	return workingmem, out_size
 
 def build_layer_config_from_conv(conv):
@@ -108,6 +128,65 @@ def build_layer_config_from_conv(conv):
 			'dilation': conv.dilation
 		}
 	return layer_config
+
+
+class MemLog():
+
+	def __init__(self) -> None:
+		self.log = {}
+
+	def set_image_size(self, image_size) -> None:
+		self.image_size = image_size
+	
+	def log_mem(self, key, mem) ->None:
+		if key in self.log:
+			if 'mem' in self.log[key]:
+				raise ValueError(key+'already exists in dict, use a different name')
+			self.log[key]['mem'] = mem
+		else:
+			self.log[key] = {'mem': mem}
+
+	def log_config(self, key, config) ->None:
+		if key in self.log:
+			if 'config' in self.log[key]:
+				raise ValueError(key+'already exists in dict, use a different name')
+			self.log[key]['config'] = config
+		else:
+			self.log[key] = {'config': config}
+
+	def add_log(self, key, config, mem) -> None:
+		if key in self.log:
+			raise ValueError(key+'already exists in dict, use a different name')
+		else:
+			self.log[key] = {'config': config, 'mem':mem}
+
+
+	def peak_mem(self) -> Any:
+		max_mem = 0
+		for k,v in self.log.items():
+			if v['mem'] >= max_mem:
+				max_mem = v['mem']
+
+		return max_mem
+
+	def peak_mem_usage(self) -> List:
+		layers = []
+		max_mem = self.peak_mem()
+		for k,v in self.log.items():
+			if v['mem'] == max_mem:
+				layers.append(k)
+
+		return layers
+	
+	def print(self):
+		#import pprint
+		if self.image_size:
+			print('image_size', self.image_size)
+		#pprint.pprint(self.log)
+		for k,v in self.log.items():
+			print(k,v)
+		print('peak_memory', self.peak_mem())
+		print('peak_memory layers', self.peak_mem_usage())
 
 class WorkingMemTable(object):
 
@@ -400,7 +479,7 @@ class MBv3WorkingMemTable(WorkingMemTable):
 			#print(mb_conv)
 			if mb_conv.inverted_bottleneck:
 				layer_config = build_layer_config_from_conv(mb_conv.inverted_bottleneck.conv)
-				workingmem = count_conv_mem(workingmem, fsize, layer_config)
+				workingmem = count_conv_mem(workingmem, fsize, layer_config, type)
 				#print('workingmem', workingmem, layer_config, 'fsize', fsize)
 				stride = mb_conv.inverted_bottleneck.conv.stride
 				if isinstance(stride, tuple):
@@ -408,7 +487,7 @@ class MBv3WorkingMemTable(WorkingMemTable):
 				fsize = int((fsize - 1) / stride + 1)
 			# depth_conv
 			layer_config = build_layer_config_from_conv(mb_conv.depth_conv.conv)
-			workingmem = count_depth_conv_mem(workingmem, fsize, layer_config)
+			workingmem = count_depth_conv_mem(workingmem, fsize, layer_config, type)
 			stride = mb_conv.depth_conv.conv.stride
 			if isinstance(stride, tuple):
 				stride = stride[0]
@@ -416,7 +495,7 @@ class MBv3WorkingMemTable(WorkingMemTable):
 			#print('workingmem', workingmem, layer_config, 'fsize', fsize)
 			# point_linear
 			layer_config = build_layer_config_from_conv(mb_conv.point_linear.conv)
-			workingmem = count_conv_mem(workingmem, fsize, layer_config)
+			workingmem = count_conv_mem(workingmem, fsize, layer_config, type)
 			stride = mb_conv.point_linear.conv.stride
 			if isinstance(stride, tuple):
 				stride = stride[0]
@@ -447,9 +526,10 @@ class MBv3WorkingMemTable(WorkingMemTable):
 		# first conv
 		layer_config = net_config['first_conv']
 		#print(net.module_str)
-		workingmem, fsize = count_conv_mem(workingmem, image_size, layer_config, type)
-		print('image size', image_size)
-		print('workingmem', workingmem)
+		#print('image size', image_size)
+		curmem, fsize = count_conv_mem(image_size, layer_config, type)
+		workingmem = max(workingmem, curmem)
+		#print('curmem', curmem, 'fsize', fsize)
 		# blocks
 		#fsize = (image_size + 1) // 2
 		for block in net_config['blocks']:
@@ -459,49 +539,53 @@ class MBv3WorkingMemTable(WorkingMemTable):
 			shortcut = block['shortcut']
 			prev_fsize = fsize
 			#if isinstance(mb_conv, MBConvLayer) or isinstance(mb_conv, DynamicMBConvLayer):
+			curblockmem  = 0
 			# inverted_bottlenect
 			if mb_conv['inverted_bottleneck']:
 				layer_config = mb_conv['inverted_bottleneck']
-				workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config)
-				print('workingmem', workingmem, layer_config, 'fsize', fsize)
+				curmem, fsize = count_conv_mem(fsize, layer_config, type)
+				curblockmem = max(curmem, curblockmem)
+				#print('curmem', curmem, layer_config, 'fsize', fsize)
 				stride = layer_config['stride']
 				if isinstance(stride, tuple):
 					stride = stride[0]
 				#fsize = int((fsize - 1) / stride + 1)
 			# depth_conv
 			layer_config = mb_conv['depth_conv']
-			workingmem, fsize = count_depth_conv_mem(workingmem, fsize, layer_config)
+			curmem, fsize = count_depth_conv_mem(fsize, layer_config, type)
+			curblockmem = max(curmem, curblockmem)
 			stride = layer_config['stride']
 			if isinstance(stride, tuple):
 				stride = stride[0]
-			#fsize = int((fsize - 1) / stride + 1)
-			print('workingmem', workingmem, layer_config, 'fsize', fsize)
+			#print('curmem', curmem, layer_config, 'fsize', fsize)
 			# point_linear
 			layer_config = mb_conv['point_linear']
-			workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config)
+			curmem, fsize = count_conv_mem(fsize, layer_config, type)
+			curblockmem = max(curmem, curblockmem)
 			stride = layer_config['stride']
 			if isinstance(stride, tuple):
 				stride = stride[0]
-			#fsize = int((fsize - 1) / stride + 1)
-			print('workingmem', workingmem, layer_config, 'fsize', fsize)
+			#print('curmem', curmem, layer_config, 'fsize', fsize)
 			# residual layer
 			if shortcut is not None and type != 0:
-				workingmem += prev_fsize * prev_fsize * shortcut.in_channels
-				#print('workingmem', workingmem, layer_config, 'fsize', fsize)
+				curblockmem += prev_fsize * prev_fsize * shortcut['in_channels']
+				#print('curblockmem', curblockmem, layer_config, 'fsize', fsize)
+			workingmem = max(workingmem, curblockmem)
 		# final expand layer
 		layer_config = net_config['final_expand_layer']
-		workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config, type)
+		curmem, fsize = count_conv_mem(fsize, layer_config, type)
+		workingmem = max(curmem, workingmem)
 		# pooling
 		fsize /= 6
 		# feature mix layer
 		layer_config = net_config['feature_mix_layer']
-		workingmem, fsize = count_conv_mem(workingmem, fsize, layer_config, type)
+		curmem, fsize = count_conv_mem(fsize, layer_config, type)
+		workingmem = max(curmem, workingmem)
+		#print('workingmem', workingmem)
 		# classifier
 		#workingmem += count_conv_mem(1, net.config['classifier']['in_features'],
 		#						 net.config['classifier']['out_features'], 1, 1)
-		if(workingmem == 676*1024 and image_size == 224):
-			exit()
-		print('-'*30)
+		#print('-'*30)
 		return workingmem / 1024  # KB
 		
 
@@ -520,85 +604,79 @@ class ResNet50WorkingMemTable(WorkingMemTable):
 	def count_workingmem_given_config(net_config, image_size=224, type=0):
 		# 0 baseline mem count; 1: ideal mem count; 2: self-loop mem count
 		workingmem = 0
+		mem_log = MemLog()
+		mem_log.set_image_size(image_size)
 		#tmp_workingmem = 0
 		# input stem
-		for layer_config in net_config['input_stem']:
-			if layer_config['name'] != 'ConvLayer':
-				layer_config = layer_config['conv']
-			in_channel = layer_config['in_channels']
-			out_channel = layer_config['out_channels']
-			out_image_size = image_size #int((image_size - 1) / layer_config['stride'] + 1)
-				
-
-			if type == 0:
-				workingmem = max(workingmem, count_baseline_conv_mem(image_size, out_image_size, in_channel, out_channel))
-			elif type == 1:
-				workingmem = max(workingmem, count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
-			elif type == 2:
-				layer = Conv_layer_param('input_stem', image_size, image_size, in_channel, layer_config['kernel_size'],
-					layer_config['padding'], layer_config['stride'], out_image_size, out_image_size, out_channel)
-				workingmem = max(workingmem, count_selfloop_conv_mem(layer))
-				#tmp_workingmem = max(tmp_workingmem, count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
-				#print(count_selfloop_conv_mem(layer), count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
-			image_size = out_image_size
-		# max pooling
-		image_size = int((image_size - 1) / 2 + 1)
-		# ResNetBottleneckBlocks
-		for block_config in net_config['blocks']:
-			in_channel = block_config['in_channels']
-			out_channel = block_config['out_channels']
-
-			out_image_size = int((image_size - 1) / block_config['stride'] + 1)
-			mid_channel = block_config['mid_channels'] if block_config['mid_channels'] is not None \
-				else round(out_channel * block_config['expand_ratio'])
-			mid_channel = make_divisible(mid_channel, MyNetwork.CHANNEL_DIVISIBLE)
-
-			# downsample
-			if block_config['stride'] == 1 and in_channel == out_channel:
-				residual_size = image_size * image_size * in_channel
+		for i, layer_config in enumerate(net_config['input_stem']):
+			#print(layer_config)
+			key = 'input_stem'+'-'+str(i)+'-'+layer_config['name']
+			if layer_config['name'] == 'ConvLayer':
+				curmem, fsize = count_conv_mem(image_size, layer_config, type)
+				workingmem = max(workingmem, curmem)
+				mem_log.add_log(key, layer_config, curmem)
+				channel = layer_config['out_channels']
+			elif layer_config['name'] == 'ResidualBlock':
+				conv_layer_config = layer_config['conv']
+				curblockmem, fsize = count_conv_mem(image_size, conv_layer_config, type)
+				mem_log.add_log(key+'conv', conv_layer_config, curblockmem)
+				shortcut_config = layer_config['shortcut']
+				if shortcut_config:
+					curblockmem += image_size * image_size * conv_layer_config['out_channels']
+					mem_log.add_log(key+'shortcut', shortcut_config, curblockmem)
+				workingmem = max(workingmem, curblockmem)
+				channel = conv_layer_config['out_channels']
 			else:
-				residual_size = out_image_size * out_image_size * out_channel
+				raise ValueError('layer type should be DynamicConvLayer or ResidualBlock')
+			image_size = fsize
+		# max pooling
+		#print(net_config['blocks'])
+		max_pool_mem, fsize = count_pool_mem(image_size, net_config['max_pooling'], channel, type)
+		mem_log.add_log('max_pooling',net_config['max_pooling'], max_pool_mem)
+		workingmem = max(workingmem, max_pool_mem)
+		for i, block_config in enumerate(net_config['blocks']):
+			key = 'block-'+str(i)+'-'+block_config['name']
+			image_size = fsize
+			curblockmem = 0
+			conv1_config = block_config['conv1']
+			conv2_config = block_config['conv2']
+			conv3_config = block_config['conv3']
+			curmem, fsize = count_conv_mem(fsize, conv1_config, type)
+			mem_log.add_log(key+'-conv1', conv1_config, curmem)
+			curblockmem = max(curmem, curblockmem)
+			curmem, fsize = count_conv_mem(fsize, conv2_config, type)
+			mem_log.add_log(key+'-conv2', conv2_config, curmem)
+			curblockmem = max(curmem, curblockmem)
+			curmem, fsize = count_conv_mem(fsize, conv3_config, type)
+			mem_log.add_log(key+'-conv3', conv3_config, curmem)
+			curblockmem = max(curmem, curblockmem)
+			# downsample
+			residual_size = 0
+			#if block_config['stride'] == 1 and block_config['in_channel_list'] == block_config['out_channel_list']:
+			# identity layer
+			if block_config['downsample'] is None:
+				residual_size = image_size * image_size * block_config['in_channels']
+				residual_config = {'name', 'IdentityLayer'}
+			elif block_config['downsample_mode'] == 'conv':
+				residual_size,_ = count_conv_mem(image_size, block_config['downsample'], type)
+				residual_config =  block_config['downsample']
+			elif block_config['downsample_mode'] == 'avgpool_conv':
+				# avg_pool
+				image_size = (image_size + 1) //  block_config['stride']
+				# conv
+				residual_size,_ = count_conv_mem(image_size, block_config['downsample'], type)
+				residual_config =  block_config['downsample']
+			if residual_config:
+				mem_log.add_log(key+'-downsample', residual_config, residual_size)
+			curblockmem += residual_size
+			workingmem = max(curblockmem, workingmem)	 
 
-			# conv1
-			workingmem = max(workingmem,
-				count_baseline_conv_mem(image_size, image_size, in_channel, mid_channel))
-			# conv2
-			if type == 0:
-				workingmem = max(workingmem, residual_size + 
-					count_baseline_conv_mem(image_size, out_image_size, mid_channel, mid_channel))
-			elif type == 1:
-				workingmem = max(workingmem, residual_size + 
-					count_ideal_conv_mem(image_size, out_image_size, mid_channel, mid_channel))
-			elif type == 2:
-				layer = Conv_layer_param('conv2', image_size, image_size, mid_channel, block_config['kernel_size'],
-					block_config['padding'], block_config['stride'], out_image_size, out_image_size, mid_channel)
-				workingmem = max(workingmem, residual_size + 
-					count_selfloop_conv_mem(layer))
-				#tmp_workingmem = max(tmp_workingmem, residual_size + 
-				#	count_ideal_conv_mem(image_size, out_image_size, in_channel, out_channel))
+		# final classifier, fc
+		#classifier_config = net_config['classifier']
+		#curmem, fsize = count_conv_mem(fsize, classifier_config, type)
+		#mem_log.add_log('classifier', curmem)
+		#workingmem = max(curmem, workingmem)
 
-			# conv3
-			if type == 0:
-				workingmem = max(workingmem, residual_size +
-					count_baseline_conv_mem(out_image_size, out_image_size, mid_channel, out_channel))
-			elif type == 1:
-				workingmem = max(workingmem, residual_size + 
-					count_ideal_conv_mem(out_image_size, out_image_size, mid_channel, out_channel))
-			elif type == 2:
-				layer = Conv_layer_param('conv3', out_image_size, out_image_size, mid_channel, 1,
-					0, 1, out_image_size, out_image_size, out_channel)
-				workingmem = max(workingmem, residual_size + 
-					count_selfloop_conv_mem(layer))
-				#tmp_workingmem = max(tmp_workingmem, residual_size +
-				#	count_ideal_conv_mem(out_image_size, out_image_size, mid_channel, out_channel))
-			
-			image_size = out_image_size
-		# final classifier
-		if type == 0 :
-			workingmem = max(workingmem, count_baseline_conv_mem(1, 1, net_config['classifier']['in_features'],
-								 net_config['classifier']['out_features']))
-		elif type == 1 or type == 2:
-			workingmem = max(workingmem, count_ideal_conv_mem(1, 1, net_config['classifier']['in_features'],
-								 net_config['classifier']['out_features']))
-		#print(workingmem / 1024) #, tmp_workingmem/1024)
-		return workingmem / 1024  # KB
+		#mem_log.print()
+		#exit()
+		return workingmem / 1024, mem_log  # KB

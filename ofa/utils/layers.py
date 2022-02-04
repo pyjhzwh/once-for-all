@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 #from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicConv2d
 from ofa.utils import get_same_padding, min_divisible_value, SEModule, ShuffleLayer
-from ofa.utils import MyNetwork, MyModule, build_conv_config
+from ofa.utils import MyNetwork, MyModule, build_conv_config, build_pool_config
 from ofa.utils import build_activation, make_divisible
 
 __all__ = [

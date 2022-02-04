@@ -36,10 +36,14 @@ class EvolutionFinder:
 	def random_valid_sample(self, latency_constraint, workingmem_constraint=float('inf')):
 		while True:
 			sample = self.arch_manager.random_sample_arch()
+			#print(sample)
 			efficiency = self.efficiency_predictor.get_efficiency(sample)
-			workingmem = self.memory_predictor.get_workingmem(sample)
+			workingmem, mem_log = self.memory_predictor.get_workingmem(sample)
+			#print('workingmem',workingmem)
+			#mem_log.print()
 			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
-				return sample, efficiency, workingmem
+				return sample, efficiency, workingmem, mem_log
+		
 
 	def mutate_sample(self, sample, latency_constraint, workingmem_constraint=float('inf')):
 		while True:
@@ -49,9 +53,9 @@ class EvolutionFinder:
 			self.arch_manager.mutate_arch(new_sample, self.arch_mutate_prob)
 
 			efficiency = self.efficiency_predictor.get_efficiency(new_sample)
-			workingmem = self.memory_predictor.get_workingmem(new_sample)
+			workingmem, mem_log = self.memory_predictor.get_workingmem(new_sample)
 			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
-				return new_sample, efficiency, workingmem
+				return new_sample, efficiency, workingmem, mem_log
 
 	def crossover_sample(self, sample1, sample2, latency_constraint, workingmem_constraint=float('inf')):
 		while True:
@@ -64,9 +68,9 @@ class EvolutionFinder:
 						new_sample[key][i] = random.choice([sample1[key][i], sample2[key][i]])
 
 			efficiency = self.efficiency_predictor.get_efficiency(new_sample)
-			workingmem = self.memory_predictor.get_workingmem(new_sample)
+			workingmem, mem_log = self.memory_predictor.get_workingmem(new_sample)
 			if efficiency <= latency_constraint and workingmem <= workingmem_constraint:
-				return new_sample, efficiency, workingmem
+				return new_sample, efficiency, workingmem, mem_log
 
 	def run_evolution_search(self, latency_constraint, workingmem_constraint=float('inf'), 
 				verbose=False, **kwargs):
@@ -81,19 +85,21 @@ class EvolutionFinder:
 		child_pool = []
 		efficiency_pool = []
 		workingmem_pool = []
+		mem_log_pool = []
 		best_info = None
 		if verbose:
 			print('Generate random population...')
 		for _ in range(self.population_size):
-			sample, efficiency, workingmem = self.random_valid_sample(latency_constraint, workingmem_constraint)
+			sample, efficiency, workingmem, mem_log = self.random_valid_sample(latency_constraint, workingmem_constraint)
 			child_pool.append(sample)
 			efficiency_pool.append(efficiency)
 			workingmem_pool.append(workingmem)
+			mem_log_pool.append(mem_log)
 			#print(sample, efficiency, workingmem)
 
 		accs = self.accuracy_predictor.predict_acc(child_pool)
 		for i in range(self.population_size):
-			population.append((accs[i].item(), child_pool[i], efficiency_pool[i], workingmem_pool[i]))
+			population.append((accs[i].item(), child_pool[i], efficiency_pool[i], workingmem_pool[i], mem_log_pool[i]))
 
 		if verbose:
 			print('Start Evolution...')
@@ -121,29 +127,32 @@ class EvolutionFinder:
 				child_pool = []
 				efficiency_pool = []
 				workingmem_pool = []
+				mem_log_pool = []
 
 				for j in range(mutation_numbers):
 					par_sample = population[np.random.randint(parents_size)][1]
 					# Mutate
-					new_sample, efficiency, workingmem = self.mutate_sample(par_sample, 
+					new_sample, efficiency, workingmem, mem_log = self.mutate_sample(par_sample, 
 						latency_constraint, workingmem_constraint)
 					child_pool.append(new_sample)
 					efficiency_pool.append(efficiency)
 					workingmem_pool.append(workingmem)
+					mem_log_pool.append(mem_log)
 
 				for j in range(self.population_size - mutation_numbers):
 					par_sample1 = population[np.random.randint(parents_size)][1]
 					par_sample2 = population[np.random.randint(parents_size)][1]
 					# Crossover
-					new_sample, efficiency, workingmem = self.crossover_sample(par_sample1, par_sample2, 
+					new_sample, efficiency, workingmem, mem_log = self.crossover_sample(par_sample1, par_sample2, 
 						latency_constraint, workingmem_constraint)
 					child_pool.append(new_sample)
 					efficiency_pool.append(efficiency)
 					workingmem_pool.append(workingmem)
+					mem_log_pool.append(mem_log)
 
 				accs = self.accuracy_predictor.predict_acc(child_pool)
 				for j in range(self.population_size):
-					population.append((accs[j].item(), child_pool[j], efficiency_pool[j], workingmem_pool[j]))
+					population.append((accs[j].item(), child_pool[j], efficiency_pool[j], workingmem_pool[j], mem_log_pool[j]))
 
 				t.update(1)
 

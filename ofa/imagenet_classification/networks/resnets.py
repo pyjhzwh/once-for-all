@@ -1,8 +1,10 @@
+from posixpath import split
 import torch.nn as nn
 
 from ofa.utils.layers import set_layer_from_config, ConvLayer, IdentityLayer, LinearLayer
 from ofa.utils.layers import ResNetBottleneckBlock, ResidualBlock
 from ofa.utils import make_divisible, MyNetwork, MyGlobalAvgPool2d
+from ofa.utils.layers import build_conv_config, build_pool_config
 
 __all__ = ['ResNets', 'ResNet50', 'ResNet50D']
 
@@ -22,8 +24,11 @@ class ResNets(MyNetwork):
 		self.classifier = classifier
 
 	def forward(self, x):
+		#print('x',x[0,0,0,:10])
+		#exit()
 		for layer in self.input_stem:
 			x = layer(x)
+			#print('out of layer',x[0,0,0,:10])
 		x = self.max_pooling(x)
 		for block in self.blocks:
 			x = block(x)
@@ -51,6 +56,7 @@ class ResNets(MyNetwork):
 			'input_stem': [
 				layer.config for layer in self.input_stem
 			],
+			'max_pooling': build_pool_config(self.max_pooling),
 			'blocks': [
 				block.config for block in self.blocks
 			],
@@ -145,7 +151,7 @@ class ResNet50(ResNets):
 class ResNet50D(ResNets):
 
 	def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
-	             expand_ratio=None, depth_param=None):
+	             expand_ratio=None, depth_param=None, pretrained=False):
 
 		expand_ratio = 0.25 if expand_ratio is None else expand_ratio
 
@@ -190,3 +196,45 @@ class ResNet50D(ResNets):
 
 		# set bn param
 		self.set_bn_param(*bn_param)
+
+	def load_state_dict_match_name(self, init):
+		
+		state_dict = init
+		depth_list = [3, 4, 6, 3]
+		new_key_dict1={"0":"0.conv.", "1":"0.bn.", "3":"1.conv.conv.", "4":"1.conv.bn.", "6":"2.conv."}
+		for key in list(state_dict.keys()):
+			split_keys = key.split(".")
+			# input_stem
+			if split_keys[0] == 'conv1':
+				new_key = 'input_stem.'+new_key_dict1[split_keys[1]]+split_keys[2]
+				state_dict[new_key] = state_dict.pop(key)
+			elif split_keys[0] == 'bn1':
+				new_key = 'input_stem.2.bn.'+split_keys[1]
+				state_dict[new_key] = state_dict.pop(key)
+			elif split_keys[0] == 'fc':
+				new_key = 'classifier.linear.'+split_keys[1]
+				state_dict[new_key] = state_dict.pop(key)
+			elif "layer" in split_keys[0]:
+				#print(split_keys)
+				layer_id = int(split_keys[0][5:])-1
+				layer_internal_id = int(split_keys[1])
+				block_id = sum(depth_list[:layer_id]) + layer_internal_id
+				if "conv" in split_keys[2]:
+					block_layer_id="conv"+str(int(split_keys[2][len("conv"):]))
+					block_layer_type=".conv."
+					feat = split_keys[3]
+				elif "bn" in split_keys[2]:
+					block_layer_id="conv"+str(int(split_keys[2][len("bn"):]))
+					block_layer_type=".bn."
+					feat = split_keys[3]
+				elif "downsample" in split_keys[2]:
+					block_layer_id="downsample"#+str(int(split_keys[2][len("downsample"):]))
+					block_layer_type=".conv." if split_keys[3]=="1" else ".bn."
+					feat = split_keys[4]
+				new_key = 'blocks.'+str(block_id)+"."+block_layer_id+block_layer_type+feat
+				state_dict[new_key] = state_dict.pop(key)
+				#print(new_key)
+				#exit()
+		#print(state_dict)
+		#exit()
+		super(ResNet50D, self).load_state_dict(state_dict)

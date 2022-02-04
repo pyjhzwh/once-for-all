@@ -251,6 +251,21 @@ class DynamicMBConvLayer(MyModule):
         return sub_layer
 
     def get_active_subnet_config(self, in_channel):
+        # update active channel
+        if self.inverted_bottleneck is not None:
+            self.inverted_bottleneck.conv.active_out_channel = \
+                make_divisible(round(in_channel * self.active_expand_ratio), MyNetwork.CHANNEL_DIVISIBLE)
+
+        self.depth_conv.conv.active_kernel_size = self.active_kernel_size
+        self.point_linear.conv.active_out_channel = self.active_out_channel
+
+        inverted_bottleneck_config = None if self.inverted_bottleneck is None else build_conv_config(self.inverted_bottleneck[0])
+        depth_conv_config = build_conv_config(self.depth_conv[0])
+        if inverted_bottleneck_config:
+            inverted_bottleneck_config['in_channels'] = in_channel
+        else:
+            depth_conv_config['in_channels'] = in_channel
+
         return {
             'name': MBConvLayer.__name__,
             'in_channels': in_channel,
@@ -261,8 +276,8 @@ class DynamicMBConvLayer(MyModule):
             'mid_channels': self.active_middle_channel(in_channel),
             'act_func': self.act_func,
             'use_se': self.use_se,
-            'inverted_bottleneck': None if self.inverted_bottleneck is None else build_conv_config(self.inverted_bottleneck[0]),
-			'depth_conv': build_conv_config(self.depth_conv[0]),
+            'inverted_bottleneck': inverted_bottleneck_config,
+			'depth_conv': depth_conv_config,
 			'point_linear':  build_conv_config(self.point_linear[0]),
         }
 
@@ -375,6 +390,7 @@ class DynamicConvLayer(MyModule):
             'dilation': self.dilation,
             'use_bn': self.use_bn,
             'act_func': self.act_func,
+			'conv':  build_conv_config(self.conv),
         }
 
     @staticmethod
@@ -519,6 +535,10 @@ class DynamicResNetBottleneckBlock(MyModule):
             'padding': self.padding,
             'act_func': self.act_func,
             'downsample_mode': self.downsample_mode,
+            'conv1': build_conv_config(self.conv1[0]),
+            'conv2': build_conv_config(self.conv2[0]),
+            'conv3': build_conv_config(self.conv3[0]),
+            'downsample': build_conv_config(self.downsample.conv) if not isinstance(self.downsample, IdentityLayer) else None
         }
 
     @staticmethod
@@ -571,6 +591,17 @@ class DynamicResNetBottleneckBlock(MyModule):
         return sub_layer
 
     def get_active_subnet_config(self, in_channel):
+        feature_dim = self.active_middle_channels
+
+        self.conv1.conv.active_out_channel = feature_dim
+        self.conv2.conv.active_out_channel = feature_dim
+        self.conv3.conv.active_out_channel = self.active_out_channel
+        if not isinstance(self.downsample, IdentityLayer):
+            self.downsample.conv.active_out_channel = self.active_out_channel
+
+        conv1_config = build_conv_config(self.conv1.conv)
+        conv1_config['in_channels'] = in_channel
+
         return {
             'name': ResNetBottleneckBlock.__name__,
             'in_channels': in_channel,
@@ -583,6 +614,11 @@ class DynamicResNetBottleneckBlock(MyModule):
             'act_func': self.act_func,
             'groups': 1,
             'downsample_mode': self.downsample_mode,
+            'conv1': conv1_config,
+            'conv2': build_conv_config(self.conv2.conv),
+            'conv3': build_conv_config(self.conv3.conv),
+            'downsample': build_conv_config(self.downsample.conv) if not isinstance(self.downsample, IdentityLayer) else None
+        
         }
 
     def re_organize_middle_weights(self, expand_ratio_stage=0):

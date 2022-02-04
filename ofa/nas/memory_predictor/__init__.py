@@ -6,7 +6,9 @@ import os
 import copy
 from .mem_predictor import *
 #from .self_conv_mem import *
-
+import torch
+from torch.utils.tensorboard._pytorch_graph import graph
+from torchsummary import summary
 
 class BaseWorkingMemModel:
 
@@ -60,6 +62,11 @@ class Mbv3WorkingMemModel(BaseWorkingMemModel):
 
 class ResNet50WorkingMemModel(BaseWorkingMemModel):
 	def get_workingmem(self, arch_dict):
+		active_net, image_size = self.get_active_subnet(arch_dict)
+		image_input = torch.zeros((1,3, image_size,image_size))
+		summary(active_net, (3, image_size, image_size), depth=5)
+		#graph(active_net, image_input, verbose=True)
+		exit()
 		active_net_config, image_size = self.get_active_subnet_config(arch_dict)
 		return ResNet50WorkingMemTable.count_workingmem_given_config(active_net_config, image_size, self.type)
 

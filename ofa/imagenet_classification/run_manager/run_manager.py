@@ -231,7 +231,9 @@ class RunManager:
                 for i, (images, labels) in enumerate(data_loader):
                     images, labels = images.to(self.device), labels.to(self.device)
                     # compute output
+                    #print('input',images[0,0,0,:10])
                     output = net(images)
+
                     loss = self.test_criterion(output, labels)
                     # measure accuracy and record loss
                     self.update_metric(metric_dict, output, labels)

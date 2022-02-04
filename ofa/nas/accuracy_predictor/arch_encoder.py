@@ -286,7 +286,8 @@ class ResNetArchEncoder:
 
 	def random_sample_arch(self):
 		return {
-			'd': [random.choice([0, 2])] + random.choices(self.depth_list, k=self.n_stage),
+			# why need an extra d?? self.input_stem_skipping; refer ofa_resenets set_active_subnet
+			'd': [random.choice([0, 2])] + random.choices(self.depth_list, k=self.n_stage), 
 			'e': random.choices(self.expand_list, k=self.max_n_blocks),
 			'w': random.choices(list(range(len(self.width_mult_list))), k=self.n_stage + 2),
 			'image_size': random.choice(self.image_size_list)

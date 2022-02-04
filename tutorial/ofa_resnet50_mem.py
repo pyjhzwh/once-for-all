@@ -15,6 +15,7 @@ from ofa.imagenet_classification.data_providers.imagenet import ImagenetDataProv
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManager
 
 
+
 ofa_network = ofa_net('ofa_resnet50', pretrained=True)
 #ofa_network = ofa_net('ofa_resnet50', pretrained=True)
 # set random seed
@@ -29,18 +30,18 @@ import torch
 from ofa.nas.accuracy_predictor import AccuracyPredictor, ResNetArchEncoder
 from ofa.utils import download_url
 
-image_size_list = [128, 160]#, 192, 224] 
-#image_size_list = [128, 144, 160, 176, 192, 224, 240, 256]
+#image_size_list = [128, 160]#, 192, 224] 
+image_size_list = [128, 144, 160, 176, 192, 224, 240, 256]
 arch_encoder = ResNetArchEncoder(
 	image_size_list=image_size_list, depth_list=ofa_network.depth_list, expand_list=ofa_network.expand_ratio_list,
     width_mult_list=ofa_network.width_mult_list, base_depth_list=ofa_network.BASE_DEPTH_LIST
 )
 
-#acc_predictor_checkpoint_path = download_url(
-#    'https://hanlab.mit.edu/files/OnceForAll/tutorial/ofa_resnet50_acc_predictor.pth',
-#    model_dir='~/.ofa/',
-#)
-acc_predictor_checkpoint_path = './acc_predictor/best.acc_predictor.ckp_origin.pth.tar'
+acc_predictor_checkpoint_path = download_url(
+    'https://hanlab.mit.edu/files/OnceForAll/tutorial/ofa_resnet50_acc_predictor.pth',
+    model_dir='~/.ofa/',
+)
+#acc_predictor_checkpoint_path = './acc_predictor/best.acc_predictor.ckp_origin.pth.tar'
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 acc_predictor = AccuracyPredictor(arch_encoder, 400, 3,
                                   checkpoint_path=acc_predictor_checkpoint_path, device=device)
@@ -95,8 +96,8 @@ run_config = ImagenetRunConfig(test_batch_size=100, n_worker=12)
 print('-'*50)
 print('baseline NAS')
 print('-'*50)
-FLOPs_constraint = 5000  # MFLOPs
-workingmem_constraint = 500# KB
+FLOPs_constraint = 10000  # MFLOPs
+workingmem_constraint = 1400# KB
 P = 100  # The size of population in each generation
 N = 200  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
@@ -129,12 +130,13 @@ print('Found best architecture with FLOPS <= %.2f M and working mem <= %.2f in %
       (FLOPs_constraint, workingmem_constraint, ed-st, best_info[0] * 100, '%'))
 
 # visualize the architecture of the searched sub-net
-_, net_config, FLOPS, workingmem = best_info
+_, net_config, FLOPS, workingmem, mem_log = best_info
 ofa_network.set_active_subnet(w=net_config['w'], d=net_config['d'], e=net_config['e'])
 print('Architecture of the searched sub-net:')
 print(ofa_network.module_str)
 print('image size:', sample_image_size)
 print('FLOPS',FLOPS,'workingmem', workingmem)
+mem_log.print()
 
 subnet = ofa_network.get_active_subnet(preserve_weight=True)
 run_manager = RunManager('.tmp/eval_subnet', subnet, run_config, init=False)
